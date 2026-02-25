@@ -46,17 +46,17 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
         throw new Error('No response');
       }
     } catch (e: any) {
-      const errorMessage = e.message || '';
+      const errorString = typeof e === 'string' ? e : JSON.stringify(e, Object.getOwnPropertyNames(e));
       
       // 503 에러는 모델 과부하 상태이지만, API 키 자체는 유효함을 의미합니다.
-      if (errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE')) {
+      if (errorString.includes('503') || errorString.includes('UNAVAILABLE') || errorString.includes('high demand')) {
         setStatus('success');
         setMessage('API 키가 유효합니다! (현재 구글 서버에 일시적인 트래픽이 있으나 키는 정상 등록되었습니다.)');
         localStorage.setItem('CUSTOM_GEMINI_API_KEY', apiKey);
         onKeyUpdated();
       } else {
         setStatus('error');
-        setMessage(`연결 실패: ${errorMessage}`);
+        setMessage(`연결 실패: ${e.message || '알 수 없는 오류가 발생했습니다.'}`);
       }
     }
   };

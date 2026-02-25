@@ -285,9 +285,21 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               className="text-center max-w-3xl mx-auto"
             >
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium mb-8">
-                <Sparkles className="w-4 h-4" />
-                Gemini 3.1 Pro & Nano Banana Powered
+              <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium">
+                  <Sparkles className="w-4 h-4" />
+                  Gemini 3.1 Pro & Nano Banana Powered
+                </div>
+                {hasApiKey && (
+                  <motion.div 
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    API Key 등록 완료
+                  </motion.div>
+                )}
               </div>
               <h2 className="text-5xl sm:text-6xl font-bold text-white tracking-tight mb-6 leading-tight">
                 단 한 줄의 주제로<br />
