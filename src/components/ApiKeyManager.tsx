@@ -12,10 +12,8 @@ interface ApiKeyManagerProps {
 
 export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyManagerProps) {
   const [apiKey, setApiKey] = useState('');
-  const [password, setPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('gemini_api_key');
@@ -61,56 +59,6 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
     }
   };
 
-  const handleSave = () => {
-    if (!apiKey || !password) {
-      alert('API 키와 암호화 비밀번호를 모두 입력해주세요.');
-      return;
-    }
-    try {
-      const data = JSON.stringify({ GEMINI_API_KEY: apiKey });
-      const encrypted = CryptoJS.AES.encrypt(data, password).toString();
-      const blob = new Blob([encrypted], { type: 'text/plain;charset=utf-8' });
-      saveAs(blob, 'api-keys.enc');
-      localStorage.setItem('gemini_api_key', apiKey);
-      onKeyUpdated();
-      alert('로컬 드라이브에 안전하게 저장되었습니다.');
-    } catch (e) {
-      alert('저장 중 오류가 발생했습니다.');
-    }
-  };
-
-  const handleLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!password) {
-      alert('복호화를 위해 먼저 비밀번호를 입력해주세요.');
-      e.target.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const encrypted = event.target?.result as string;
-        const decryptedBytes = CryptoJS.AES.decrypt(encrypted, password);
-        const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
-        if (!decryptedText) throw new Error('복호화 실패');
-        
-        const parsed = JSON.parse(decryptedText);
-        if (parsed.GEMINI_API_KEY) {
-          setApiKey(parsed.GEMINI_API_KEY);
-          localStorage.setItem('gemini_api_key', parsed.GEMINI_API_KEY);
-          onKeyUpdated();
-          alert('API 키를 성공적으로 불러왔습니다. 연결 테스트를 진행해보세요.');
-        }
-      } catch (err) {
-        alert('파일을 읽거나 복호화하는 데 실패했습니다. 비밀번호를 확인해주세요.');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
@@ -128,21 +76,11 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
           <div>
             <label className="block text-sm font-medium text-zinc-400 mb-2">Gemini API Key</label>
             <input
+              id="apiKeyInput"
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="AI Studio API 키 입력"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">암호화/복호화 비밀번호</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="로컬 파일 저장/불러오기용 비밀번호"
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
             />
           </div>
@@ -164,30 +102,6 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
               <p className="break-all">{message}</p>
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-zinc-800">
-            <button
-              onClick={handleSave}
-              className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
-            >
-              <Download className="w-4 h-4" />
-              로컬 저장 (.enc)
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
-            >
-              <Upload className="w-4 h-4" />
-              로컬 불러오기
-            </button>
-            <input
-              type="file"
-              accept=".enc"
-              ref={fileInputRef}
-              onChange={handleLoad}
-              className="hidden"
-            />
-          </div>
         </div>
       </div>
     </div>
