@@ -3,7 +3,7 @@ import { AspectRatio, CarouselSegment, InstagramPostData } from './types';
 import { generatePlan, generateImage, getApiKey, generateInstagramPost } from './services/ai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, Key, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X } from 'lucide-react';
+import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, Key, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, Lock } from 'lucide-react';
 import ApiKeyManager from './components/ApiKeyManager';
 import { motion } from 'motion/react';
 
@@ -11,6 +11,10 @@ type WorkflowState = 'idle' | 'planning' | 'generating_images' | 'generating_cap
 type ScreenState = 'home' | 'planner';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [accessKeyInput, setAccessKeyInput] = useState('');
+  const [accessError, setAccessError] = useState(false);
+
   const [screen, setScreen] = useState<ScreenState>('home');
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState<number>(5);
@@ -25,7 +29,22 @@ export default function App() {
 
   useEffect(() => {
     checkApiKey();
+    if (sessionStorage.getItem('app_access') === 'true') {
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (accessKeyInput === '0705') {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('app_access', 'true');
+      setAccessError(false);
+    } else {
+      setAccessError(true);
+      setAccessKeyInput('');
+    }
+  };
 
   const checkApiKey = () => {
     const key = getApiKey();
@@ -174,6 +193,55 @@ export default function App() {
       alert("이미지 병합에 실패했습니다.");
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 selection:bg-indigo-500/30 relative overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] opacity-20 pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-500 via-purple-500 to-transparent blur-[100px] rounded-full mix-blend-screen" />
+        </div>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-zinc-900/60 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl w-full max-w-md relative z-10"
+        >
+          <div className="flex flex-col items-center text-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-6">
+              <Lock className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight mb-2">혁신 캐러셀 AI</h1>
+            <p className="text-zinc-400">접근 키를 입력하여 잠금을 해제하세요.</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <input
+                type="password"
+                value={accessKeyInput}
+                onChange={(e) => {
+                  setAccessKeyInput(e.target.value);
+                  setAccessError(false);
+                }}
+                placeholder="접근 키 입력"
+                className={`w-full bg-black/40 border ${accessError ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-indigo-500'} rounded-2xl px-4 py-4 text-center text-lg tracking-widest focus:outline-none focus:ring-2 ${accessError ? 'focus:ring-red-500/50' : 'focus:ring-indigo-500/50'} transition-all text-white placeholder:text-zinc-600`}
+                autoFocus
+              />
+              {accessError && (
+                <p className="text-red-400 text-sm text-center mt-3">접근 키가 올바르지 않습니다.</p>
+              )}
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all shadow-xl shadow-white/10 hover:shadow-white/20"
+            >
+              입장하기
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-indigo-500/30 relative overflow-hidden">
