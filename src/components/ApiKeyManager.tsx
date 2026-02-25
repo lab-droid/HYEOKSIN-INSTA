@@ -18,7 +18,7 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('CUSTOM_GEMINI_API_KEY');
+    const stored = localStorage.getItem('gemini_api_key');
     if (stored) setApiKey(stored);
   }, [isOpen]);
 
@@ -40,7 +40,7 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
       if (response.text) {
         setStatus('success');
         setMessage('연결 테스트 성공! 이 키가 앱에 적용됩니다.');
-        localStorage.setItem('CUSTOM_GEMINI_API_KEY', apiKey);
+        localStorage.setItem('gemini_api_key', apiKey);
         onKeyUpdated();
       } else {
         throw new Error('No response');
@@ -52,7 +52,7 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
       if (errorString.includes('503') || errorString.includes('UNAVAILABLE') || errorString.includes('high demand')) {
         setStatus('success');
         setMessage('API 키가 유효합니다! (현재 구글 서버에 일시적인 트래픽이 있으나 키는 정상 등록되었습니다.)');
-        localStorage.setItem('CUSTOM_GEMINI_API_KEY', apiKey);
+        localStorage.setItem('gemini_api_key', apiKey);
         onKeyUpdated();
       } else {
         setStatus('error');
@@ -71,7 +71,7 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
       const encrypted = CryptoJS.AES.encrypt(data, password).toString();
       const blob = new Blob([encrypted], { type: 'text/plain;charset=utf-8' });
       saveAs(blob, 'api-keys.enc');
-      localStorage.setItem('CUSTOM_GEMINI_API_KEY', apiKey);
+      localStorage.setItem('gemini_api_key', apiKey);
       onKeyUpdated();
       alert('로컬 드라이브에 안전하게 저장되었습니다.');
     } catch (e) {
@@ -99,7 +99,7 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
         const parsed = JSON.parse(decryptedText);
         if (parsed.GEMINI_API_KEY) {
           setApiKey(parsed.GEMINI_API_KEY);
-          localStorage.setItem('CUSTOM_GEMINI_API_KEY', parsed.GEMINI_API_KEY);
+          localStorage.setItem('gemini_api_key', parsed.GEMINI_API_KEY);
           onKeyUpdated();
           alert('API 키를 성공적으로 불러왔습니다. 연결 테스트를 진행해보세요.');
         }

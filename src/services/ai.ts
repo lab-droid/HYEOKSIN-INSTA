@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AspectRatio, CarouselSegment, InstagramPostData } from "../types";
 
 export const getApiKey = () => {
-  return localStorage.getItem('CUSTOM_GEMINI_API_KEY') || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  return localStorage.getItem('gemini_api_key') || process.env.API_KEY || process.env.GEMINI_API_KEY;
 };
 
 export async function generatePlan(topic: string, count: number, ratio: AspectRatio, referenceImages: string[] = []): Promise<CarouselSegment[]> {
