@@ -49,9 +49,15 @@ export async function generatePlan(topic: string, count: number, ratio: AspectRa
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   
-  return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey });
-    const promptText = `
+  const models = ["gemini-3.1-pro-preview", "gemini-3-flash-preview"];
+  let lastError: any;
+
+  for (const modelName of models) {
+    try {
+      console.log(`Attempting plan generation with model: ${modelName}`);
+      return await withRetry(async () => {
+        const ai = new GoogleGenAI({ apiKey });
+        const promptText = `
 당신은 대한민국 최고의 SNS 콘텐츠 바이럴 전략가이자 딥리서치 전문가입니다.
 구글 검색을 활용하여 사용자의 주제와 관련된 가장 최신의, 신뢰할 수 있는 고품질 데이터와 트렌드를 깊이 있게 조사(Deep Research)하세요.
 조사한 팩트 기반의 정보를 바탕으로 장수(${count}장)에 맞춰 논리적 흐름을 짜주세요.
@@ -68,41 +74,47 @@ ${referenceImages.length > 0 ? '\n중요: 첨부된 참고 이미지들의 디�
 사이즈: ${ratio}
 `;
 
-    const parts: any[] = [{ text: promptText }];
-    for (const img of referenceImages) {
-      const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-      const data = img.split(',')[1];
-      if (data) {
-        parts.push({ inlineData: { data, mimeType } });
-      }
-    }
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: { parts },
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.INTEGER, description: "슬라이드 번호 (1부터 시작)" },
-              logicalStep: { type: Type.STRING, description: "논리 단계 (예: Hook, Info, Solution, Closing)" },
-              keyMessage: { type: Type.STRING, description: "이미지에 렌더링될 100% 한글 카피" },
-              visualPrompt: { type: Type.STRING, description: "Imagen 3 전용 비주얼 묘사 (영어)" }
-            },
-            required: ["id", "logicalStep", "keyMessage", "visualPrompt"]
+        const parts: any[] = [{ text: promptText }];
+        for (const img of referenceImages) {
+          const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+          const data = img.split(',')[1];
+          if (data) {
+            parts.push({ inlineData: { data, mimeType } });
           }
         }
-      }
-    });
 
-    const text = response.text;
-    if (!text) throw new Error("Failed to generate plan");
-    return JSON.parse(text) as CarouselSegment[];
-  });
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: { parts },
+          config: {
+            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.INTEGER, description: "슬라이드 번호 (1부터 시작)" },
+                  logicalStep: { type: Type.STRING, description: "논리 단계 (예: Hook, Info, Solution, Closing)" },
+                  keyMessage: { type: Type.STRING, description: "이미지에 렌더링될 100% 한글 카피" },
+                  visualPrompt: { type: Type.STRING, description: "Imagen 3 전용 비주얼 묘사 (영어)" }
+                },
+                required: ["id", "logicalStep", "keyMessage", "visualPrompt"]
+              }
+            }
+          }
+        });
+
+        const text = response.text;
+        if (!text) throw new Error("Failed to generate plan");
+        return JSON.parse(text) as CarouselSegment[];
+      }, 2);
+    } catch (e) {
+      console.warn(`Plan generation failed with ${modelName}, trying next model...`, e);
+      lastError = e;
+    }
+  }
+  throw lastError;
 }
 
 export async function generateImage(segment: CarouselSegment, ratio: AspectRatio, referenceImages: string[] = []): Promise<string> {
@@ -186,11 +198,17 @@ export async function generateInstagramPost(topic: string, segments: CarouselSeg
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   
-  return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey });
+  const models = ["gemini-3.1-pro-preview", "gemini-3-flash-preview"];
+  let lastError: any;
 
-    const summary = segments.map(s => `- ${s.logicalStep}: ${s.keyMessage}`).join('\n');
-    const prompt = `
+  for (const modelName of models) {
+    try {
+      console.log(`Attempting caption generation with model: ${modelName}`);
+      return await withRetry(async () => {
+        const ai = new GoogleGenAI({ apiKey });
+
+        const summary = segments.map(s => `- ${s.logicalStep}: ${s.keyMessage}`).join('\n');
+        const prompt = `
 당신은 인스타그램 알고리즘 전문가이자 전문 카피라이터입니다.
 다음 카드뉴스 기획안을 바탕으로 인스타그램 피드에 올릴 최적화된 본문(캡션)과 해시태그를 작성해주세요.
 
@@ -204,28 +222,34 @@ ${summary}
 3. 텍스트 내에 적절한 이모지를 사용할 것.
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            caption: { type: Type.STRING, description: "인스타그램 본문 캡션 (이모지 포함)" },
-            hashtags: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "해시태그 배열 (예: ['#직장인', '#시간관리'])"
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                caption: { type: Type.STRING, description: "인스타그램 본문 캡션 (이모지 포함)" },
+                hashtags: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "해시태그 배열 (예: ['#직장인', '#시간관리'])"
+                }
+              },
+              required: ["caption", "hashtags"]
             }
-          },
-          required: ["caption", "hashtags"]
-        }
-      }
-    });
+          }
+        });
 
-    const text = response.text;
-    if (!text) throw new Error("Failed to generate post data");
-    return JSON.parse(text) as InstagramPostData;
-  });
+        const text = response.text;
+        if (!text) throw new Error("Failed to generate post data");
+        return JSON.parse(text) as InstagramPostData;
+      }, 2);
+    } catch (e) {
+      console.warn(`Caption generation failed with ${modelName}, trying next model...`, e);
+      lastError = e;
+    }
+  }
+  throw lastError;
 }
