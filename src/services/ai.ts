@@ -78,7 +78,7 @@ ${referenceImages.length > 0 ? '\n중요: 첨부된 참고 이미지들의 디�
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: { parts },
       config: {
         tools: [{ googleSearch: {} }],
@@ -111,10 +111,25 @@ export async function generateImage(segment: CarouselSegment, ratio: AspectRatio
     throw new Error("API Key is missing.");
   }
   
-  return withRetry(async () => {
-    const aiImage = new GoogleGenAI({ apiKey });
-    
-    const promptText = `
+  // 모델 후보군: 가장 좋은 모델부터 순차적으로 시도
+  const models = [
+    'gemini-3-pro-image-preview',
+    'gemini-3.1-flash-image-preview',
+    'gemini-2.5-flash-image'
+  ];
+
+  let lastError: any;
+
+  for (const modelName of models) {
+    try {
+      console.log(`Attempting image generation with model: ${modelName}`);
+      // 모델별로 재시도 횟수를 조절 (상위 모델은 더 끈질기게 시도)
+      const retriesForThisModel = modelName.includes('pro') ? 4 : 2;
+      
+      return await withRetry(async () => {
+        const aiImage = new GoogleGenAI({ apiKey });
+        
+        const promptText = `
 Create a high-quality infographic style image for a Korean Instagram carousel.
 Style: Clean, professional, high-end design, structured layout, high contrast.
 ${referenceImages.length > 0 ? '\nCRITICAL: You MUST perfectly match the tone, manner, color palette, and overall style of the provided reference images (100% consistency).' : ''}
@@ -124,34 +139,47 @@ IMPORTANT: You MUST render the following Korean text perfectly and clearly witho
 Text to render: "${segment.keyMessage}"
 `;
 
-    const parts: any[] = [{ text: promptText }];
-    for (const img of referenceImages) {
-      const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-      const data = img.split(',')[1];
-      if (data) {
-        parts.push({ inlineData: { data, mimeType } });
-      }
-    }
-
-    // gemini-3-pro-image-preview is the highest quality model for text rendering
-    const response = await aiImage.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: { parts },
-      config: {
-        imageConfig: {
-          aspectRatio: ratio,
-          imageSize: "1K"
+        const parts: any[] = [{ text: promptText }];
+        for (const img of referenceImages) {
+          const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+          const data = img.split(',')[1];
+          if (data) {
+            parts.push({ inlineData: { data, mimeType } });
+          }
         }
-      }
-    });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
+        const config: any = {
+          imageConfig: {
+            aspectRatio: ratio,
+          }
+        };
+
+        // Pro 모델이나 3.1 Flash 모델은 1K 사이즈 지원
+        if (modelName.includes('3')) {
+          config.imageConfig.imageSize = "1K";
+        }
+
+        const response = await aiImage.models.generateContent({
+          model: modelName,
+          contents: { parts },
+          config
+        });
+
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+          if (part.inlineData) {
+            return `data:image/png;base64,${part.inlineData.data}`;
+          }
+        }
+        throw new Error("No image data in response");
+      }, retriesForThisModel); // 모델별 최적화된 재시도 횟수 적용
+    } catch (e) {
+      console.warn(`Model ${modelName} failed:`, e);
+      lastError = e;
+      // 다음 모델로 넘어감
     }
-    throw new Error("Failed to generate image: No image data in response");
-  }, 5); // 이미지 생성은 더 많이 재시도
+  }
+  
+  throw lastError || new Error("All models failed to generate image");
 }
 
 export async function generateInstagramPost(topic: string, segments: CarouselSegment[]): Promise<InstagramPostData> {
@@ -177,7 +205,7 @@ ${summary}
 `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
