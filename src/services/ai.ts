@@ -5,11 +5,37 @@ export const getApiKey = () => {
   return localStorage.getItem('gemini_api_key') || process.env.API_KEY || process.env.GEMINI_API_KEY;
 };
 
+async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 5): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      lastError = e;
+      const errorString = typeof e === 'string' ? e : JSON.stringify(e, Object.getOwnPropertyNames(e));
+      
+      // 503, Deadline expired, high demand 에러인 경우 재시도
+      if (errorString.includes('503') || errorString.includes('Deadline expired') || errorString.includes('high demand') || errorString.includes('UNAVAILABLE')) {
+        if (attempt < maxRetries) {
+          const delay = Math.min(attempt * 3000, 15000); // 점진적으로 대기 시간 증가 (최대 15초)
+          console.log(`Attempt ${attempt} failed due to high demand, retrying in ${delay/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      throw e;
+    }
+  }
+  throw lastError;
+}
+
 export async function generatePlan(topic: string, count: number, ratio: AspectRatio, referenceImages: string[] = []): Promise<CarouselSegment[]> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
-  const ai = new GoogleGenAI({ apiKey });
-  const promptText = `
+  
+  return withRetry(async () => {
+    const ai = new GoogleGenAI({ apiKey });
+    const promptText = `
 당신은 대한민국 최고의 SNS 콘텐츠 바이럴 전략가이자 딥리서치 전문가입니다.
 구글 검색을 활용하여 사용자의 주제와 관련된 가장 최신의, 신뢰할 수 있는 고품질 데이터와 트렌드를 깊이 있게 조사(Deep Research)하세요.
 조사한 팩트 기반의 정보를 바탕으로 장수(${count}장)에 맞춰 논리적 흐름을 짜주세요.
@@ -26,40 +52,41 @@ ${referenceImages.length > 0 ? '\n중요: 첨부된 참고 이미지들의 디�
 사이즈: ${ratio}
 `;
 
-  const parts: any[] = [{ text: promptText }];
-  for (const img of referenceImages) {
-    const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-    const data = img.split(',')[1];
-    if (data) {
-      parts.push({ inlineData: { data, mimeType } });
-    }
-  }
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: { parts },
-    config: {
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.INTEGER, description: "슬라이드 번호 (1부터 시작)" },
-            logicalStep: { type: Type.STRING, description: "논리 단계 (예: Hook, Info, Solution, Closing)" },
-            keyMessage: { type: Type.STRING, description: "이미지에 렌더링될 100% 한글 카피" },
-            visualPrompt: { type: Type.STRING, description: "Imagen 3 전용 비주얼 묘사 (영어)" }
-          },
-          required: ["id", "logicalStep", "keyMessage", "visualPrompt"]
-        }
+    const parts: any[] = [{ text: promptText }];
+    for (const img of referenceImages) {
+      const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+      const data = img.split(',')[1];
+      if (data) {
+        parts.push({ inlineData: { data, mimeType } });
       }
     }
-  });
 
-  const text = response.text;
-  if (!text) throw new Error("Failed to generate plan");
-  return JSON.parse(text) as CarouselSegment[];
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: { parts },
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.INTEGER, description: "슬라이드 번호 (1부터 시작)" },
+              logicalStep: { type: Type.STRING, description: "논리 단계 (예: Hook, Info, Solution, Closing)" },
+              keyMessage: { type: Type.STRING, description: "이미지에 렌더링될 100% 한글 카피" },
+              visualPrompt: { type: Type.STRING, description: "Imagen 3 전용 비주얼 묘사 (영어)" }
+            },
+            required: ["id", "logicalStep", "keyMessage", "visualPrompt"]
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Failed to generate plan");
+    return JSON.parse(text) as CarouselSegment[];
+  });
 }
 
 export async function generateImage(segment: CarouselSegment, ratio: AspectRatio, referenceImages: string[] = []): Promise<string> {
@@ -67,53 +94,59 @@ export async function generateImage(segment: CarouselSegment, ratio: AspectRatio
   if (!apiKey) {
     throw new Error("API Key is missing.");
   }
-  const aiImage = new GoogleGenAI({ apiKey });
   
-  const promptText = `
-Create an infographic style image for a Korean informational Instagram carousel.
-Style: Clean, structured layout (like tables, grids, or lists), high contrast, professional typography, bold headings.
-It should look like a highly engaging informational post (e.g., finance, real estate, or educational content).
-Use clear visual hierarchy, color-coded badges, and simple icons where appropriate.
+  return withRetry(async () => {
+    const aiImage = new GoogleGenAI({ apiKey });
+    
+    const promptText = `
+Create a high-quality infographic style image for a Korean Instagram carousel.
+Style: Clean, professional, high-end design, structured layout, high contrast.
 ${referenceImages.length > 0 ? '\nCRITICAL: You MUST perfectly match the tone, manner, color palette, and overall style of the provided reference images (100% consistency).' : ''}
 Background visual: ${segment.visualPrompt}
-Text to render clearly in the image: "${segment.keyMessage}"
+
+IMPORTANT: You MUST render the following Korean text perfectly and clearly without any character corruption or typos.
+Text to render: "${segment.keyMessage}"
 `;
 
-  const parts: any[] = [{ text: promptText }];
-  for (const img of referenceImages) {
-    const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-    const data = img.split(',')[1];
-    if (data) {
-      parts.push({ inlineData: { data, mimeType } });
-    }
-  }
-
-  const response = await aiImage.models.generateContent({
-    model: 'gemini-3-pro-image-preview',
-    contents: { parts },
-    config: {
-      imageConfig: {
-        aspectRatio: ratio,
-        imageSize: "1K"
+    const parts: any[] = [{ text: promptText }];
+    for (const img of referenceImages) {
+      const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+      const data = img.split(',')[1];
+      if (data) {
+        parts.push({ inlineData: { data, mimeType } });
       }
     }
-  });
 
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData) {
-      return `data:image/png;base64,${part.inlineData.data}`;
+    // gemini-3-pro-image-preview is the highest quality model for text rendering
+    const response = await aiImage.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: { parts },
+      config: {
+        imageConfig: {
+          aspectRatio: ratio,
+          imageSize: "1K"
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
     }
-  }
-  throw new Error("Failed to generate image");
+    throw new Error("Failed to generate image: No image data in response");
+  }, 5); // 이미지 생성은 더 많이 재시도
 }
 
 export async function generateInstagramPost(topic: string, segments: CarouselSegment[]): Promise<InstagramPostData> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
-  const ai = new GoogleGenAI({ apiKey });
+  
+  return withRetry(async () => {
+    const ai = new GoogleGenAI({ apiKey });
 
-  const summary = segments.map(s => `- ${s.logicalStep}: ${s.keyMessage}`).join('\n');
-  const prompt = `
+    const summary = segments.map(s => `- ${s.logicalStep}: ${s.keyMessage}`).join('\n');
+    const prompt = `
 당신은 인스타그램 알고리즘 전문가이자 전문 카피라이터입니다.
 다음 카드뉴스 기획안을 바탕으로 인스타그램 피드에 올릴 최적화된 본문(캡션)과 해시태그를 작성해주세요.
 
@@ -127,27 +160,28 @@ ${summary}
 3. 텍스트 내에 적절한 이모지를 사용할 것.
 `;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          caption: { type: Type.STRING, description: "인스타그램 본문 캡션 (이모지 포함)" },
-          hashtags: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "해시태그 배열 (예: ['#직장인', '#시간관리'])"
-          }
-        },
-        required: ["caption", "hashtags"]
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            caption: { type: Type.STRING, description: "인스타그램 본문 캡션 (이모지 포함)" },
+            hashtags: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "해시태그 배열 (예: ['#직장인', '#시간관리'])"
+            }
+          },
+          required: ["caption", "hashtags"]
+        }
       }
-    }
-  });
+    });
 
-  const text = response.text;
-  if (!text) throw new Error("Failed to generate post data");
-  return JSON.parse(text) as InstagramPostData;
+    const text = response.text;
+    if (!text) throw new Error("Failed to generate post data");
+    return JSON.parse(text) as InstagramPostData;
+  });
 }

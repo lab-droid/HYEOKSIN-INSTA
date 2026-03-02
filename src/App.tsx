@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AspectRatio, CarouselSegment, InstagramPostData } from './types';
 import { generatePlan, generateImage, getApiKey, generateInstagramPost } from './services/ai';
 import JSZip from 'jszip';
@@ -61,7 +61,7 @@ export default function App() {
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files || []) as File[];
     if (referenceImages.length + files.length > 20) {
       alert('참고 이미지는 최대 20장까지만 업로드 가능합니다.');
       return;
@@ -102,16 +102,37 @@ export default function App() {
 
       // Step 2: Images
       setWorkflowState('generating_images');
-      const newSegments = [...plan];
-      for (let i = 0; i < newSegments.length; i++) {
-        const imgUrl = await generateImage(newSegments[i], ratio, referenceImages);
-        newSegments[i].imageUrl = imgUrl;
-        setSegments([...newSegments]); // Update UI progressively
+      const planWithImages = [...plan];
+      
+      // 병렬로 이미지 생성 진행하되, 안정성을 위해 2개씩 묶어서 처리 (속도와 안정성 균형)
+      const chunkSize = 2;
+      for (let i = 0; i < planWithImages.length; i += chunkSize) {
+        const chunk = planWithImages.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(async (segment) => {
+          const index = planWithImages.findIndex(s => s.id === segment.id);
+          try {
+            const imgUrl = await generateImage(segment, ratio, referenceImages);
+            setSegments(prev => {
+              const updated = [...prev];
+              if (updated[index]) {
+                updated[index] = { ...updated[index], imageUrl: imgUrl };
+              }
+              return updated;
+            });
+          } catch (err) {
+            console.error(`Failed to generate image for slide ${index + 1}`, err);
+          }
+        }));
+        
+        // 청크 사이에 짧은 지연시간 추가 (API 안정성 확보)
+        if (i + chunkSize < planWithImages.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
       // Step 3: Caption & Hashtags
       setWorkflowState('generating_caption');
-      const post = await generateInstagramPost(topic, newSegments);
+      const post = await generateInstagramPost(topic, planWithImages);
       setPostData(post);
 
       // Done
@@ -186,7 +207,7 @@ export default function App() {
       });
 
       canvas.toBlob((blob) => {
-        if (blob) saveAs(blob, 'carousel_merged.png');
+        if (blob) saveAs(blob as Blob, 'carousel_merged.png');
       }, 'image/png');
     } catch (e) {
       console.error("Failed to merge images", e);
