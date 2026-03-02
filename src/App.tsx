@@ -3,7 +3,7 @@ import { AspectRatio, CarouselSegment, InstagramPostData } from './types';
 import { generatePlan, generateImage, getApiKey, generateInstagramPost } from './services/ai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, Key, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, Lock } from 'lucide-react';
+import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, Key, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, Lock, XCircle } from 'lucide-react';
 import ApiKeyManager from './components/ApiKeyManager';
 import { motion } from 'motion/react';
 
@@ -104,29 +104,37 @@ export default function App() {
       setWorkflowState('generating_images');
       const planWithImages = [...plan];
       
-      // 병렬로 이미지 생성 진행하되, 안정성을 위해 2개씩 묶어서 처리 (속도와 안정성 균형)
-      const chunkSize = 2;
+      // 병렬로 이미지 생성 진행하되, 안정성을 위해 1개씩 처리 (최대한의 안정성)
+      const chunkSize = 1;
       for (let i = 0; i < planWithImages.length; i += chunkSize) {
         const chunk = planWithImages.slice(i, i + chunkSize);
         await Promise.all(chunk.map(async (segment) => {
           const index = planWithImages.findIndex(s => s.id === segment.id);
           try {
+            // 개별 이미지 생성에 최대 2분 타임아웃 (네트워크 지연 고려)
             const imgUrl = await generateImage(segment, ratio, referenceImages);
             setSegments(prev => {
               const updated = [...prev];
               if (updated[index]) {
-                updated[index] = { ...updated[index], imageUrl: imgUrl };
+                updated[index] = { ...updated[index], imageUrl: imgUrl, error: false };
               }
               return updated;
             });
           } catch (err) {
             console.error(`Failed to generate image for slide ${index + 1}`, err);
+            setSegments(prev => {
+              const updated = [...prev];
+              if (updated[index]) {
+                updated[index] = { ...updated[index], error: true };
+              }
+              return updated;
+            });
           }
         }));
         
         // 청크 사이에 짧은 지연시간 추가 (API 안정성 확보)
         if (i + chunkSize < planWithImages.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
 
@@ -140,11 +148,12 @@ export default function App() {
     } catch (e: any) {
       console.error(e);
       setWorkflowState('idle');
-      if (e.message?.includes('Requested entity was not found')) {
+      const errorMsg = e.message || JSON.stringify(e);
+      if (errorMsg.includes('Requested entity was not found')) {
         setHasApiKey(false);
         alert('API 키가 유효하지 않습니다. 다시 선택해주세요.');
       } else {
-        alert(`자동화 처리 중 오류가 발생했습니다: ${e.message}`);
+        alert(`자동화 처리 중 오류가 발생했습니다: ${errorMsg}`);
       }
     }
   };
@@ -615,6 +624,11 @@ export default function App() {
                         <div className={`relative bg-zinc-900 flex items-center justify-center ${ratio === '1:1' ? 'aspect-square' : 'aspect-[4/5]'}`}>
                           {segment.imageUrl ? (
                             <img src={segment.imageUrl} alt={`Slide ${idx + 1}`} className="w-full h-full object-cover" />
+                          ) : segment.error ? (
+                            <div className="text-red-400 flex flex-col items-center gap-3 p-4 text-center">
+                              <XCircle className="w-10 h-10 opacity-50" />
+                              <span className="text-xs font-medium">이미지 생성 실패<br/>(서버 과부하)</span>
+                            </div>
                           ) : (
                             <div className="text-zinc-600 flex flex-col items-center gap-3">
                               {workflowState === 'generating_images' ? (
@@ -656,6 +670,42 @@ export default function App() {
                       </div>
                       
                       <div className="space-y-6 flex-1">
+                        {segment.error && !segment.imageUrl && (
+                          <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-4">
+                            <p className="text-xs text-red-400 mb-3 flex items-center gap-2">
+                              <XCircle className="w-4 h-4" />
+                              이미지 생성에 실패했습니다. (서버 과부하)
+                            </p>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setSegments(prev => {
+                                    const updated = [...prev];
+                                    updated[idx] = { ...updated[idx], error: false };
+                                    return updated;
+                                  });
+                                  const imgUrl = await generateImage(segment, ratio, referenceImages);
+                                  setSegments(prev => {
+                                    const updated = [...prev];
+                                    updated[idx] = { ...updated[idx], imageUrl: imgUrl, error: false };
+                                    return updated;
+                                  });
+                                } catch (err) {
+                                  setSegments(prev => {
+                                    const updated = [...prev];
+                                    updated[idx] = { ...updated[idx], error: true };
+                                    return updated;
+                                  });
+                                }
+                              }}
+                              className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-red-500/30"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              이 슬라이드만 다시 생성하기
+                            </button>
+                          </div>
+                        )}
+                        
                         <div className="bg-black/20 rounded-2xl p-5 border border-white/5">
                           <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-2">
                             <LayoutTemplate className="w-4 h-4" />

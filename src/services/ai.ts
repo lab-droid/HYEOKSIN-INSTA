@@ -9,16 +9,28 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 5): Promi
   let lastError: any;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await fn();
+      // 60초 타임아웃 추가
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Request Timeout")), 60000)
+      );
+      return await Promise.race([fn(), timeoutPromise]) as T;
     } catch (e: any) {
       lastError = e;
       const errorString = typeof e === 'string' ? e : JSON.stringify(e, Object.getOwnPropertyNames(e));
       
-      // 503, Deadline expired, high demand 에러인 경우 재시도
-      if (errorString.includes('503') || errorString.includes('Deadline expired') || errorString.includes('high demand') || errorString.includes('UNAVAILABLE')) {
+      // 재시도 대상 에러: 503, 시간초과, 과부하, 데이터 없음 등
+      const isRetryable = 
+        errorString.includes('503') || 
+        errorString.includes('Deadline expired') || 
+        errorString.includes('high demand') || 
+        errorString.includes('UNAVAILABLE') ||
+        errorString.includes('Timeout') ||
+        errorString.includes('No image data');
+
+      if (isRetryable) {
         if (attempt < maxRetries) {
-          const delay = Math.min(attempt * 3000, 15000); // 점진적으로 대기 시간 증가 (최대 15초)
-          console.log(`Attempt ${attempt} failed due to high demand, retrying in ${delay/1000}s...`);
+          const delay = Math.min(attempt * 4000, 20000); // 대기 시간 증가
+          console.log(`Attempt ${attempt} failed, retrying in ${delay/1000}s... Error: ${errorString.substring(0, 100)}`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
