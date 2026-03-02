@@ -5,13 +5,13 @@ export const getApiKey = () => {
   return localStorage.getItem('gemini_api_key') || process.env.API_KEY || process.env.GEMINI_API_KEY;
 };
 
-async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 5): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 7): Promise<T> {
   let lastError: any;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // 60초 타임아웃 추가
+      // 120초 타임아웃으로 증가 (고품질 이미지 생성은 시간이 더 걸릴 수 있음)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Request Timeout")), 60000)
+        setTimeout(() => reject(new Error("Request Timeout")), 120000)
       );
       return await Promise.race([fn(), timeoutPromise]) as T;
     } catch (e: any) {
@@ -29,8 +29,12 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 5): Promi
 
       if (isRetryable) {
         if (attempt < maxRetries) {
-          const delay = Math.min(attempt * 4000, 20000); // 대기 시간 증가
-          console.log(`Attempt ${attempt} failed, retrying in ${delay/1000}s... Error: ${errorString.substring(0, 100)}`);
+          // 지수 백오프 + 지터(Jitter) 추가하여 서버 부하 분산
+          const baseDelay = Math.pow(2, attempt) * 2000; 
+          const jitter = Math.random() * 1000;
+          const delay = Math.min(baseDelay + jitter, 30000); // 최대 30초 대기
+          
+          console.log(`Attempt ${attempt} failed, retrying in ${Math.round(delay/1000)}s... Error: ${errorString.substring(0, 100)}`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }

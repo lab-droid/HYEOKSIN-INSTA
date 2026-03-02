@@ -132,9 +132,9 @@ export default function App() {
           }
         }));
         
-        // 청크 사이에 짧은 지연시간 추가 (API 안정성 확보)
+        // 청크 사이에 지연시간 추가 (API 안정성 확보를 위해 3초로 증가)
         if (i + chunkSize < planWithImages.length) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
       }
 
@@ -791,6 +791,57 @@ export default function App() {
       <footer className="border-t border-white/5 py-8 mt-12 text-center text-zinc-500 text-sm relative z-10">
         이 앱은 정혁신이 개발하였습니다.
       </footer>
+
+      {/* Retry All Failed Images Button */}
+      {segments.some(s => s.error && !s.imageUrl) && (
+        <div className="fixed bottom-24 left-0 right-0 z-50 p-4 pointer-events-none">
+          <div className="max-w-xl mx-auto flex flex-col gap-2">
+            <motion.div 
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="bg-red-500 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between pointer-events-auto"
+            >
+              <div className="flex items-center gap-3">
+                <XCircle className="w-5 h-5" />
+                <span className="text-sm font-bold">일부 이미지 생성에 실패했습니다.</span>
+              </div>
+              <button 
+                onClick={async () => {
+                  const failedSegments = segments.filter(s => s.error && !s.imageUrl);
+                  for (const segment of failedSegments) {
+                    const idx = segments.findIndex(s => s.id === segment.id);
+                    try {
+                      setSegments(prev => {
+                        const updated = [...prev];
+                        updated[idx] = { ...updated[idx], error: false };
+                        return updated;
+                      });
+                      const imgUrl = await generateImage(segment, ratio, referenceImages);
+                      setSegments(prev => {
+                        const updated = [...prev];
+                        updated[idx] = { ...updated[idx], imageUrl: imgUrl, error: false };
+                        return updated;
+                      });
+                    } catch (err) {
+                      setSegments(prev => {
+                        const updated = [...prev];
+                        updated[idx] = { ...updated[idx], error: true };
+                        return updated;
+                      });
+                    }
+                    // 개별 재시도 사이에도 지연시간 추가
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                  }
+                }}
+                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                실패한 항목 모두 재시도
+              </button>
+            </motion.div>
+          </div>
+        </div>
+      )}
 
       <ApiKeyManager 
         isOpen={isKeyManagerOpen} 
