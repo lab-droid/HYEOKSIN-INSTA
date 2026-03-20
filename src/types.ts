@@ -1,4 +1,4 @@
-export interface CarouselSegment {
+export interface CardnewsSegment {
   id: number;
   logicalStep: string;   // 예: "후킹(Hook)", "본론(Body)" 
   keyMessage: string;    // 이미지에 렌더링될 100% 한글 카피 

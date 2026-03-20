@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AspectRatio, CarouselSegment, InstagramPostData } from "../types";
+import { AspectRatio, CardnewsSegment, InstagramPostData } from "../types";
 
 export const getApiKey = () => {
   return localStorage.getItem('gemini_api_key') || process.env.API_KEY || process.env.GEMINI_API_KEY;
@@ -45,7 +45,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 7): Promi
   throw lastError;
 }
 
-export async function generatePlan(topic: string, count: number, ratio: AspectRatio, referenceImages: string[] = []): Promise<CarouselSegment[]> {
+export async function generatePlan(topic: string, count: number, ratio: AspectRatio, referenceImages: string[] = []): Promise<CardnewsSegment[]> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   
@@ -107,7 +107,7 @@ ${referenceImages.length > 0 ? '\n중요: 첨부된 참고 이미지들의 디�
 
         const text = response.text;
         if (!text) throw new Error("Failed to generate plan");
-        return JSON.parse(text) as CarouselSegment[];
+        return JSON.parse(text) as CardnewsSegment[];
       }, 2);
     } catch (e) {
       console.warn(`Plan generation failed with ${modelName}, trying next model...`, e);
@@ -117,7 +117,7 @@ ${referenceImages.length > 0 ? '\n중요: 첨부된 참고 이미지들의 디�
   throw lastError;
 }
 
-export async function generateImage(segment: CarouselSegment, ratio: AspectRatio, referenceImages: string[] = []): Promise<string> {
+export async function generateImage(segment: CardnewsSegment, ratio: AspectRatio, referenceImages: string[] = []): Promise<string> {
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error("API Key is missing.");
@@ -142,7 +142,7 @@ export async function generateImage(segment: CarouselSegment, ratio: AspectRatio
         const aiImage = new GoogleGenAI({ apiKey });
         
         const promptText = `
-Create a high-quality infographic style image for a Korean Instagram carousel.
+Create a high-quality infographic style image for a Korean Instagram cardnews.
 Style: Clean, professional, high-end design, structured layout, high contrast.
 ${referenceImages.length > 0 ? '\nCRITICAL: You MUST perfectly match the tone, manner, color palette, and overall style of the provided reference images (100% consistency).' : ''}
 Background visual: ${segment.visualPrompt}
@@ -194,7 +194,7 @@ Text to render: "${segment.keyMessage}"
   throw lastError || new Error("All models failed to generate image");
 }
 
-export async function generateInstagramPost(topic: string, segments: CarouselSegment[]): Promise<InstagramPostData> {
+export async function generateInstagramPost(topic: string, segments: CardnewsSegment[]): Promise<InstagramPostData> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   

@@ -1,55 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { AspectRatio, CarouselSegment, InstagramPostData } from './types';
-import { generatePlan, generateImage, getApiKey, generateInstagramPost } from './services/ai';
+import { AspectRatio, CardnewsSegment, InstagramPostData } from './types';
+import { generatePlan, generateImage, generateInstagramPost } from './services/ai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, Key, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, Lock, XCircle } from 'lucide-react';
-import ApiKeyManager from './components/ApiKeyManager';
+import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key } from 'lucide-react';
 import { motion } from 'motion/react';
+import ApiKeyManager from './components/ApiKeyManager';
 
 type WorkflowState = 'idle' | 'planning' | 'generating_images' | 'generating_caption' | 'completed';
 type ScreenState = 'home' | 'planner';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [accessKeyInput, setAccessKeyInput] = useState('');
-  const [accessError, setAccessError] = useState(false);
-
   const [screen, setScreen] = useState<ScreenState>('home');
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState<number>(5);
   const [ratio, setRatio] = useState<AspectRatio>('1:1');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
-  const [segments, setSegments] = useState<CarouselSegment[]>([]);
+  const [segments, setSegments] = useState<CardnewsSegment[]>([]);
   const [postData, setPostData] = useState<InstagramPostData | null>(null);
   const [workflowState, setWorkflowState] = useState<WorkflowState>('idle');
-  const [hasApiKey, setHasApiKey] = useState(true);
-  const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
 
   useEffect(() => {
-    checkApiKey();
-    if (sessionStorage.getItem('app_access') === 'true') {
-      setIsAuthenticated(true);
-    }
+    setHasApiKey(!!localStorage.getItem('gemini_api_key'));
   }, []);
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (accessKeyInput === '0705') {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('app_access', 'true');
-      setAccessError(false);
-    } else {
-      setAccessError(true);
-      setAccessKeyInput('');
-    }
-  };
-
-  const checkApiKey = () => {
-    const key = getApiKey();
-    setHasApiKey(!!key);
-  };
 
   const handleGoHome = () => {
     setTopic('');
@@ -84,10 +60,6 @@ export default function App() {
   };
 
   const handleStartAutomation = async () => {
-    if (!hasApiKey) {
-      setIsKeyManagerOpen(true);
-      return;
-    }
     if (!topic) return;
     
     setSegments([]);
@@ -149,12 +121,7 @@ export default function App() {
       console.error(e);
       setWorkflowState('idle');
       const errorMsg = e.message || JSON.stringify(e);
-      if (errorMsg.includes('Requested entity was not found')) {
-        setHasApiKey(false);
-        alert('API 키가 유효하지 않습니다. 다시 선택해주세요.');
-      } else {
-        alert(`자동화 처리 중 오류가 발생했습니다: ${errorMsg}`);
-      }
+      alert(`자동화 처리 중 오류가 발생했습니다: ${errorMsg}`);
     }
   };
 
@@ -182,7 +149,7 @@ export default function App() {
     });
     if (!hasImages) return;
     const content = await zip.generateAsync({ type: 'blob' });
-    saveAs(content, 'carousel_images.zip');
+    saveAs(content, 'cardnews_images.zip');
   };
 
   const downloadMergedPNG = async () => {
@@ -216,62 +183,13 @@ export default function App() {
       });
 
       canvas.toBlob((blob) => {
-        if (blob) saveAs(blob as Blob, 'carousel_merged.png');
+        if (blob) saveAs(blob as Blob, 'cardnews_merged.png');
       }, 'image/png');
     } catch (e) {
       console.error("Failed to merge images", e);
       alert("이미지 병합에 실패했습니다.");
     }
   };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 selection:bg-indigo-500/30 relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] opacity-20 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-b from-indigo-500 via-purple-500 to-transparent blur-[100px] rounded-full mix-blend-screen" />
-        </div>
-        
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-zinc-900/60 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl w-full max-w-md relative z-10"
-        >
-          <div className="flex flex-col items-center text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-6">
-              <Lock className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight mb-2">혁신 캐러셀 AI</h1>
-            <p className="text-zinc-400">접근 키를 입력하여 잠금을 해제하세요.</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                value={accessKeyInput}
-                onChange={(e) => {
-                  setAccessKeyInput(e.target.value);
-                  setAccessError(false);
-                }}
-                placeholder="접근 키 입력"
-                className={`w-full bg-black/40 border ${accessError ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-indigo-500'} rounded-2xl px-4 py-4 text-center text-lg tracking-widest focus:outline-none focus:ring-2 ${accessError ? 'focus:ring-red-500/50' : 'focus:ring-indigo-500/50'} transition-all text-white placeholder:text-zinc-600`}
-                autoFocus
-              />
-              {accessError && (
-                <p className="text-red-400 text-sm text-center mt-3">접근 키가 올바르지 않습니다.</p>
-              )}
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all shadow-xl shadow-white/10 hover:shadow-white/20"
-            >
-              입장하기
-            </button>
-          </form>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-indigo-500/30 relative overflow-hidden">
@@ -290,7 +208,7 @@ export default function App() {
               <LayoutTemplate className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">
-              혁신 캐러셀 AI
+              혁신 카드뉴스 AI
             </h1>
           </div>
           <button
@@ -313,40 +231,54 @@ export default function App() {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center max-w-3xl mx-auto"
+              className="text-center max-w-5xl mx-auto w-full"
             >
-              <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium">
-                  <Sparkles className="w-4 h-4" />
-                  Gemini 3.1 Pro & Nano Banana Powered
-                </div>
-                {hasApiKey && (
-                  <motion.div 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium"
+              <div className="relative w-full aspect-video mb-16 rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 group flex items-center justify-center">
+                <div className="absolute inset-0 bg-zinc-900/60 z-10 transition-colors duration-700 group-hover:bg-zinc-900/50" />
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-900/20 to-transparent z-10" />
+                <img 
+                  src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&h=1080&fit=crop" 
+                  alt="혁신 카드뉴스 AI Background" 
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                />
+                
+                <div className="relative z-20 text-center px-6 flex flex-col items-center w-full max-w-4xl">
+                  <div className="flex items-center justify-center gap-3 mb-6 flex-wrap">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm font-medium shadow-xl">
+                      <Sparkles className="w-4 h-4 text-indigo-400" />
+                      <span>Gemini 3.1 Pro & Nano Banana</span>
+                    </div>
+                    {hasApiKey && (
+                      <motion.div 
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 text-emerald-300 text-sm font-medium shadow-xl"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        API Key Ready
+                      </motion.div>
+                    )}
+                  </div>
+
+                  <h1 className="text-5xl sm:text-7xl md:text-8xl font-extrabold text-white tracking-tight drop-shadow-2xl mb-6">
+                    혁신 카드뉴스 AI
+                  </h1>
+                  
+                  <p className="text-xl sm:text-2xl text-zinc-200 drop-shadow-lg max-w-2xl font-medium mb-10 leading-relaxed">
+                    단 한 줄의 텍스트로 시작하는<br/>
+                    <span className="text-indigo-300">전문가 수준의 인스타그램 카드뉴스</span>
+                  </p>
+
+                  <button
+                    onClick={() => setScreen('planner')}
+                    className="inline-flex items-center gap-2 bg-white text-black hover:bg-zinc-200 font-bold text-lg px-8 py-4 rounded-2xl transition-all shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:shadow-[0_0_60px_rgba(255,255,255,0.4)] hover:-translate-y-1"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    API Key 등록 완료
-                  </motion.div>
-                )}
+                    지금 바로 시작하기
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-              <h2 className="text-5xl sm:text-6xl font-bold text-white tracking-tight mb-6 leading-tight">
-                단 한 줄의 주제로<br />
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
-                  완벽한 인스타그램 캐러셀을.
-                </span>
-              </h2>
-              <p className="text-lg text-zinc-400 mb-10 leading-relaxed max-w-2xl mx-auto">
-                구글 딥리서치 기반의 탄탄한 기획부터 고품질 인포그래픽 이미지, 알고리즘에 최적화된 캡션까지 원클릭으로 완성하세요.
-              </p>
-              <button
-                onClick={() => setScreen('planner')}
-                className="inline-flex items-center gap-2 bg-white text-black hover:bg-zinc-200 font-bold text-lg px-8 py-4 rounded-2xl transition-all shadow-xl shadow-white/10 hover:shadow-white/20 hover:-translate-y-1"
-              >
-                시작하기
-                <ArrowRight className="w-5 h-5" />
-              </button>
             </motion.div>
 
             <motion.div 
@@ -794,7 +726,7 @@ export default function App() {
 
       {/* Retry All Failed Images Button */}
       {segments.some(s => s.error && !s.imageUrl) && (
-        <div className="fixed bottom-24 left-0 right-0 z-50 p-4 pointer-events-none">
+        <div className="fixed bottom-10 left-0 right-0 z-50 p-4 pointer-events-none">
           <div className="max-w-xl mx-auto flex flex-col gap-2">
             <motion.div 
               initial={{ y: 50, opacity: 0 }}
@@ -846,7 +778,7 @@ export default function App() {
       <ApiKeyManager 
         isOpen={isKeyManagerOpen} 
         onClose={() => setIsKeyManagerOpen(false)} 
-        onKeyUpdated={checkApiKey}
+        onKeyUpdated={() => setHasApiKey(true)} 
       />
     </div>
   );
