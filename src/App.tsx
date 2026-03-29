@@ -3,7 +3,7 @@ import { AspectRatio, CardnewsSegment, InstagramPostData } from './types';
 import { generatePlan, generateImage, generateInstagramPost } from './services/ai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key } from 'lucide-react';
+import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key, HelpCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import ApiKeyManager from './components/ApiKeyManager';
 
@@ -22,6 +22,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [isHowToOpen, setIsHowToOpen] = useState(false);
 
   useEffect(() => {
     setHasApiKey(!!localStorage.getItem('gemini_api_key'));
@@ -211,17 +212,26 @@ export default function App() {
               혁신 카드뉴스 AI
             </h1>
           </div>
-          <button
-            onClick={() => setIsKeyManagerOpen(true)}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shadow-sm ${
-              hasApiKey 
-                ? 'bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300' 
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/25'
-            }`}
-          >
-            <Key className="w-4 h-4" />
-            <span>{hasApiKey ? 'API 키 관리' : 'API 키 설정'}</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsHowToOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shadow-sm bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>사용방법</span>
+            </button>
+            <button
+              onClick={() => setIsKeyManagerOpen(true)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shadow-sm ${
+                hasApiKey 
+                  ? 'bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300' 
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/25'
+              }`}
+            >
+              <Key className="w-4 h-4" />
+              <span>{hasApiKey ? 'API 키 관리' : 'API 키 설정'}</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -249,14 +259,23 @@ export default function App() {
                       <Sparkles className="w-4 h-4 text-indigo-400" />
                       <span>Gemini 3.1 Pro & Nano Banana</span>
                     </div>
-                    {hasApiKey && (
+                    {hasApiKey ? (
                       <motion.div 
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 text-emerald-300 text-sm font-medium shadow-xl"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        API Key Ready
+                        API Key 설정 완료
+                      </motion.div>
+                    ) : (
+                      <motion.div 
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/20 backdrop-blur-md border border-red-500/30 text-red-300 text-sm font-medium shadow-xl animate-pulse"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        API Key 미설정 (필수)
                       </motion.div>
                     )}
                   </div>
@@ -320,6 +339,16 @@ export default function App() {
               AI 기획 에이전트
             </h2>
             
+            {!hasApiKey && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-6 flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-bold text-red-400 mb-1">API Key 미설정</h3>
+                  <p className="text-xs text-red-300/80">API 키를 설정해야 서비스를 이용할 수 있습니다. 우측 상단의 'API 키 설정' 버튼을 눌러주세요.</p>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-2">주제 (Topic)</label>
@@ -415,7 +444,7 @@ export default function App() {
 
               <button
                 onClick={handleStartAutomation}
-                disabled={!topic || workflowState !== 'idle'}
+                disabled={!topic || workflowState !== 'idle' || !hasApiKey}
                 className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 mt-2 shadow-lg shadow-indigo-500/25 disabled:shadow-none"
               >
                 {workflowState !== 'idle' ? (
@@ -643,9 +672,57 @@ export default function App() {
                             <LayoutTemplate className="w-4 h-4" />
                             Key Message (한국어 카피)
                           </h3>
-                          <p className="text-lg font-medium leading-snug text-white">
-                            {segment.keyMessage}
-                          </p>
+                          <textarea
+                            value={segment.keyMessage}
+                            onChange={(e) => {
+                              const newMsg = e.target.value;
+                              setSegments(prev => {
+                                const updated = [...prev];
+                                updated[idx] = { ...updated[idx], keyMessage: newMsg };
+                                return updated;
+                              });
+                            }}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-lg font-medium leading-snug text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none"
+                            rows={3}
+                          />
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              onClick={() => {
+                                alert('텍스트가 수정되었습니다. (이미지 재생성 없이 텍스트만 저장됨)');
+                              }}
+                              className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium rounded-lg transition-all border border-white/5"
+                            >
+                              텍스트만 수정 적용
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setSegments(prev => {
+                                    const updated = [...prev];
+                                    updated[idx] = { ...updated[idx], error: false, imageUrl: undefined };
+                                    return updated;
+                                  });
+                                  const currentSegment = { ...segments[idx], error: false, imageUrl: undefined };
+                                  const imgUrl = await generateImage(currentSegment, ratio, referenceImages);
+                                  setSegments(prev => {
+                                    const updated = [...prev];
+                                    updated[idx] = { ...updated[idx], imageUrl: imgUrl, error: false };
+                                    return updated;
+                                  });
+                                } catch (err) {
+                                  setSegments(prev => {
+                                    const updated = [...prev];
+                                    updated[idx] = { ...updated[idx], error: true };
+                                    return updated;
+                                  });
+                                }
+                              }}
+                              className="flex-1 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-xs font-medium rounded-lg transition-all border border-indigo-500/30 flex items-center justify-center gap-1"
+                            >
+                              <ImageIcon className="w-3 h-3" />
+                              이미지 함께 재생성
+                            </button>
+                          </div>
                         </div>
                         
                         <div className="bg-black/20 rounded-2xl p-5 border border-white/5">
@@ -780,6 +857,66 @@ export default function App() {
         onClose={() => setIsKeyManagerOpen(false)} 
         onKeyUpdated={() => setHasApiKey(true)} 
       />
+
+      {/* How-to Guide Modal */}
+      {isHowToOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-zinc-900 border border-white/10 rounded-3xl p-8 max-w-2xl w-full shadow-2xl relative"
+          >
+            <button 
+              onClick={() => setIsHowToOpen(false)}
+              className="absolute top-6 right-6 text-zinc-400 hover:text-white transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-indigo-400" />
+              혁신 카드뉴스 AI 사용방법
+            </h2>
+            <div className="space-y-6 text-zinc-300 leading-relaxed">
+              <div className="flex gap-4">
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold shrink-0">1</div>
+                <div>
+                  <h3 className="text-white font-semibold mb-1">API 키 설정하기</h3>
+                  <p className="text-sm">우측 상단의 'API 키 설정' 버튼을 눌러 Google Gemini API 키를 입력합니다. (무료 발급 가능)</p>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold shrink-0">2</div>
+                <div>
+                  <h3 className="text-white font-semibold mb-1">주제 및 옵션 입력</h3>
+                  <p className="text-sm">원하는 카드뉴스 주제를 입력하고, 장수와 비율(1:1 또는 4:5)을 선택합니다. 참고할 이미지가 있다면 업로드할 수 있습니다.</p>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold shrink-0">3</div>
+                <div>
+                  <h3 className="text-white font-semibold mb-1">AI 자동 생성</h3>
+                  <p className="text-sm">'AI 자동 생성 시작' 버튼을 누르면 딥리서치 기획부터 고품질 이미지 렌더링, 인스타그램 캡션까지 한 번에 생성됩니다.</p>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold shrink-0">4</div>
+                <div>
+                  <h3 className="text-white font-semibold mb-1">수정 및 다운로드</h3>
+                  <p className="text-sm">생성된 텍스트를 직접 수정하거나 이미지를 다시 생성할 수 있습니다. 완료되면 일괄 다운로드하여 인스타그램에 업로드하세요.</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-8 pt-6 border-t border-white/10 flex justify-end">
+              <button 
+                onClick={() => setIsHowToOpen(false)}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
