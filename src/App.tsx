@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AspectRatio, CardnewsSegment, InstagramPostData } from './types';
-import { generatePlan, generateImage, generateInstagramPost } from './services/ai';
+import { generatePlan, generateImage, generateInstagramPost, generateDraftFromLinks, generateDraftFromImage } from './services/ai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key, HelpCircle } from 'lucide-react';
+import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key, HelpCircle, Link, FileText, Plus, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import ApiKeyManager from './components/ApiKeyManager';
 
@@ -13,9 +13,14 @@ type ScreenState = 'home' | 'planner';
 export default function App() {
   const [screen, setScreen] = useState<ScreenState>('home');
   const [topic, setTopic] = useState('');
-  const [count, setCount] = useState<number>(5);
+  const [count, setCount] = useState<number>(1);
   const [ratio, setRatio] = useState<AspectRatio>('1:1');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
+  const [newLink, setNewLink] = useState('');
+  const [contentDraft, setContentDraft] = useState('');
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [segments, setSegments] = useState<CardnewsSegment[]>([]);
   const [postData, setPostData] = useState<InstagramPostData | null>(null);
   const [workflowState, setWorkflowState] = useState<WorkflowState>('idle');
@@ -23,6 +28,9 @@ export default function App() {
   const [isKeyManagerOpen, setIsKeyManagerOpen] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isHowToOpen, setIsHowToOpen] = useState(false);
+  const [sourceImage, setSourceImage] = useState<string | null>(null);
+  const [logoImage, setLogoImage] = useState<string | null>(null);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
 
   useEffect(() => {
     setHasApiKey(!!localStorage.getItem('gemini_api_key'));
@@ -32,6 +40,9 @@ export default function App() {
     setTopic('');
     setSegments([]);
     setReferenceImages([]);
+    setSourceImage(null);
+    setReferenceLinks([]);
+    setContentDraft('');
     setPostData(null);
     setWorkflowState('idle');
     setScreen('home');
@@ -60,23 +71,121 @@ export default function App() {
     setReferenceImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleSourceImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setSourceImage(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setLogoImage(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleGenerateDraftFromImage = async () => {
+    if (!sourceImage) {
+      alert('분석할 이미지를 먼저 업로드해주세요.');
+      return;
+    }
+    if (!hasApiKey) {
+      alert('API 키를 먼저 설정해주세요.');
+      return;
+    }
+
+    setIsAnalyzingImage(true);
+    try {
+      const { topic: generatedTopic, draft } = await generateDraftFromImage(sourceImage);
+      if (generatedTopic) setTopic(generatedTopic);
+      setContentDraft(draft);
+    } catch (e: any) {
+      console.error(e);
+      alert(`이미지 분석 중 오류가 발생했습니다: ${e.message || JSON.stringify(e)}`);
+    } finally {
+      setIsAnalyzingImage(false);
+    }
+  };
+
+  const addReferenceLink = () => {
+    if (!newLink) return;
+    if (!newLink.startsWith('http')) {
+      alert('올바른 URL 형식이 아닙니다. (http:// 또는 https://로 시작해야 합니다)');
+      return;
+    }
+    setReferenceLinks(prev => [...prev, newLink]);
+    setNewLink('');
+  };
+
+  const removeReferenceLink = (index: number) => {
+    setReferenceLinks(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleGenerateDraft = async () => {
+    if (referenceLinks.length === 0) {
+      alert('참고 링크를 최소 1개 이상 추가해주세요.');
+      return;
+    }
+    if (!hasApiKey) {
+      alert('API 키를 먼저 설정해주세요.');
+      return;
+    }
+
+    setIsDrafting(true);
+    try {
+      const { topic: generatedTopic, draft } = await generateDraftFromLinks(referenceLinks);
+      if (generatedTopic) setTopic(generatedTopic);
+      setContentDraft(draft);
+    } catch (e: any) {
+      console.error(e);
+      alert(`초안 생성 중 오류가 발생했습니다: ${e.message || JSON.stringify(e)}`);
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
   const handleStartAutomation = async () => {
     if (!topic) return;
     
     setSegments([]);
     setPostData(null);
     setCopied(false);
+    setProgress(0);
     
     try {
-      // Step 1: Planning
+      // Step 1: Planning (0% -> 20%)
       setWorkflowState('planning');
-      const plan = await generatePlan(topic, count, ratio, referenceImages);
+      setProgress(10);
+      
+      // 소스 이미지가 있으면 참고 이미지 목록 맨 앞에 추가
+      const finalReferenceImages = sourceImage ? [sourceImage, ...referenceImages] : referenceImages;
+      
+      const plan = await generatePlan(topic, count, ratio, finalReferenceImages, contentDraft);
       setSegments(plan);
+      setProgress(20);
 
-      // Step 2: Images
+      // Step 2: Images (20% -> 80%)
       setWorkflowState('generating_images');
       const planWithImages = [...plan];
       
+      const totalSlides = planWithImages.length;
+      const progressPerSlide = 60 / totalSlides;
+
       // 병렬로 이미지 생성 진행하되, 안정성을 위해 1개씩 처리 (최대한의 안정성)
       const chunkSize = 1;
       for (let i = 0; i < planWithImages.length; i += chunkSize) {
@@ -85,7 +194,18 @@ export default function App() {
           const index = planWithImages.findIndex(s => s.id === segment.id);
           try {
             // 개별 이미지 생성에 최대 2분 타임아웃 (네트워크 지연 고려)
-            const imgUrl = await generateImage(segment, ratio, referenceImages);
+            let imgUrl = await generateImage(segment, ratio, finalReferenceImages);
+            
+            // 로고가 있으면 워터마크 적용
+            if (logoImage) {
+              try {
+                imgUrl = await applyLogoWatermark(imgUrl, logoImage);
+              } catch (wmErr) {
+                console.warn('Failed to apply watermark', wmErr);
+                // 워터마크 실패해도 원본 이미지는 사용
+              }
+            }
+
             setSegments(prev => {
               const updated = [...prev];
               if (updated[index]) {
@@ -102,6 +222,8 @@ export default function App() {
               }
               return updated;
             });
+          } finally {
+            setProgress(prev => Math.min(prev + progressPerSlide, 80));
           }
         }));
         
@@ -110,11 +232,14 @@ export default function App() {
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
       }
+      setProgress(80);
 
-      // Step 3: Caption & Hashtags
+      // Step 3: Caption & Hashtags (80% -> 100%)
       setWorkflowState('generating_caption');
+      setProgress(90);
       const post = await generateInstagramPost(topic, planWithImages);
       setPostData(post);
+      setProgress(100);
 
       // Done
       setWorkflowState('completed');
@@ -134,8 +259,67 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const downloadImage = (url: string, filename: string) => {
-    saveAs(url, filename);
+  const downloadAsFormat = async (url: string, filename: string, format: 'png' | 'jpg') => {
+    if (format === 'png') {
+      saveAs(url, `${filename}.png`);
+      return;
+    }
+
+    // Convert to JPG using canvas
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) saveAs(blob, `${filename}.jpg`);
+        }, 'image/jpeg', 0.9);
+      }
+    };
+    img.src = url;
+  };
+
+  const applyLogoWatermark = async (imageUrl: string, logoUrl: string): Promise<string> => {
+    const mainImg = new Image();
+    mainImg.crossOrigin = 'anonymous';
+    mainImg.src = imageUrl;
+    await new Promise((resolve) => (mainImg.onload = resolve));
+
+    const logoImg = new Image();
+    logoImg.crossOrigin = 'anonymous';
+    logoImg.src = logoUrl;
+    await new Promise((resolve) => (logoImg.onload = resolve));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = mainImg.width;
+    canvas.height = mainImg.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return imageUrl;
+
+    // Draw main image
+    ctx.drawImage(mainImg, 0, 0);
+
+    // Calculate logo size (e.g., 20% of main image width for better safety)
+    const logoWidth = mainImg.width * 0.2;
+    const scale = logoWidth / logoImg.width;
+    const logoHeight = logoImg.height * scale;
+
+    // Top center position
+    const x = (mainImg.width - logoWidth) / 2;
+    const y = mainImg.height * 0.04; // 4% margin from top
+
+    // Draw logo with full opacity
+    ctx.globalAlpha = 1.0;
+    ctx.drawImage(logoImg, x, y, logoWidth, logoHeight);
+    ctx.globalAlpha = 1.0;
+
+    return canvas.toDataURL('image/png');
   };
 
   const downloadAll = async () => {
@@ -442,6 +626,166 @@ export default function App() {
                 </div>
               </div>
 
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" />
+                    이미지로 생성 (Image to Content)
+                  </label>
+                </div>
+                <div className="bg-black/40 border border-white/5 rounded-2xl p-4 space-y-3">
+                  {sourceImage ? (
+                    <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-white/10 group">
+                      <img src={sourceImage} alt="Source" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setSourceImage(null)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-2 w-full py-8 rounded-xl border border-dashed border-white/20 text-sm font-medium text-zinc-400 hover:text-white hover:border-white/40 hover:bg-white/5 transition-all cursor-pointer">
+                      <Upload className="w-6 h-6 mb-1" />
+                      <span>분석할 이미지 업로드</span>
+                      <span className="text-[10px] text-zinc-500">이미지를 기반으로 주제와 초안을 생성합니다</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleSourceImageUpload}
+                      />
+                    </label>
+                  )}
+
+                  <button
+                    onClick={handleGenerateDraftFromImage}
+                    disabled={!sourceImage || isAnalyzingImage || !hasApiKey}
+                    className="w-full py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 disabled:opacity-50 text-indigo-400 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-indigo-500/30"
+                  >
+                    {isAnalyzingImage ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        이미지 분석 및 원터치 기획 중...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        원터치 기획 (이미지 기반)
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <LayoutTemplate className="w-4 h-4" />
+                    로고 (선택)
+                  </label>
+                </div>
+                <div className="bg-black/40 border border-white/5 rounded-2xl p-4">
+                  {logoImage ? (
+                    <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-white/10 group bg-zinc-800/50 flex items-center justify-center">
+                      <img src={logoImage} alt="Logo" className="max-w-[80%] max-h-[80%] object-contain" />
+                      <button
+                        onClick={() => setLogoImage(null)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-2 w-full py-6 rounded-xl border border-dashed border-white/20 text-sm font-medium text-zinc-400 hover:text-white hover:border-white/40 hover:bg-white/5 transition-all cursor-pointer">
+                      <Upload className="w-5 h-5 mb-1" />
+                      <span>로고 이미지 업로드</span>
+                      <span className="text-[10px] text-zinc-500">상단 중앙에 자연스럽게 배치됩니다</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleLogoUpload}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <Link className="w-4 h-4" />
+                    참고 링크 (Reference Links)
+                  </label>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newLink}
+                      onChange={(e) => setNewLink(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addReferenceLink()}
+                      placeholder="https://..."
+                      className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-white placeholder:text-zinc-600"
+                    />
+                    <button
+                      onClick={addReferenceLink}
+                      className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-white/10 text-zinc-300 transition-all"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  {referenceLinks.length > 0 && (
+                    <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                      {referenceLinks.map((link, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white/5 rounded-lg border border-white/5 group">
+                          <span className="text-xs text-zinc-400 truncate flex-1">{link}</span>
+                          <button
+                            onClick={() => removeReferenceLink(idx)}
+                            className="text-zinc-500 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleGenerateDraft}
+                    disabled={referenceLinks.length === 0 || isDrafting || !hasApiKey}
+                    className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-white/10"
+                  >
+                    {isDrafting ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        링크 크롤링 및 초안 생성 중...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                        링크에서 콘텐츠 초안 생성하기
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  콘텐츠 초안 (Content Draft)
+                </label>
+                <textarea
+                  value={contentDraft}
+                  onChange={(e) => setContentDraft(e.target.value)}
+                  placeholder="링크에서 생성하거나 직접 입력하세요. 이 내용이 카드뉴스 기획의 핵심 소스가 됩니다."
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-white placeholder:text-zinc-600 min-h-[120px] resize-y"
+                />
+              </div>
+
               <button
                 onClick={handleStartAutomation}
                 disabled={!topic || workflowState !== 'idle' || !hasApiKey}
@@ -469,10 +813,23 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               className="bg-zinc-900/60 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl"
             >
-              <h2 className="text-lg font-semibold flex items-center gap-2 mb-4 text-white">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                생성 진행 상황
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2 text-white">
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                  생성 진행 상황
+                </h2>
+                <span className="text-lg font-bold text-indigo-400">{Math.round(progress)}%</span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full h-2 bg-zinc-800 rounded-full mb-6 overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-600"
+                />
+              </div>
+
               <div className="space-y-4">
                 <StepItem 
                   status={workflowState === 'planning' ? 'active' : (workflowState === 'idle' ? 'pending' : 'completed')} 
@@ -553,7 +910,18 @@ export default function App() {
             <div className="space-y-6">
               <div className="flex items-center justify-between bg-zinc-900/40 backdrop-blur-md border border-white/10 px-6 py-4 rounded-2xl">
                 <h2 className="text-lg font-semibold text-white">기획 및 렌더링 결과</h2>
-                <span className="text-sm font-medium text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full">총 {segments.length}장</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full">총 {segments.length}장</span>
+                  {segments.length > 1 && segments.some(s => s.imageUrl) && (
+                    <button
+                      onClick={downloadAll}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/20 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      전체 다운로드
+                    </button>
+                  )}
+                </div>
               </div>
               
               <div className="grid grid-cols-1 gap-8">
@@ -614,7 +982,26 @@ export default function App() {
                             </div>
                             <Bookmark className="w-6 h-6 text-white" />
                           </div>
-                          <p className="text-xs text-zinc-400"><span className="font-semibold text-white">aha_original</span> {segment.logicalStep} 단계 디자인 시안입니다.</p>
+                          <p className="text-xs text-zinc-400 mb-3"><span className="font-semibold text-white">aha_original</span> {segment.logicalStep} 단계 디자인 시안입니다.</p>
+                          
+                          {segment.imageUrl && (
+                            <div className="flex gap-2 pt-2 border-t border-white/5">
+                              <button
+                                onClick={() => downloadAsFormat(segment.imageUrl!, `slide_${idx + 1}`, 'png')}
+                                className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-[10px] font-bold text-zinc-300 rounded-lg flex items-center justify-center gap-1 transition-all"
+                              >
+                                <Download className="w-3 h-3" />
+                                PNG
+                              </button>
+                              <button
+                                onClick={() => downloadAsFormat(segment.imageUrl!, `slide_${idx + 1}`, 'jpg')}
+                                className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-[10px] font-bold text-zinc-300 rounded-lg flex items-center justify-center gap-1 transition-all"
+                              >
+                                <Download className="w-3 h-3" />
+                                JPG
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -738,7 +1125,7 @@ export default function App() {
                         {segment.imageUrl && (
                           <div className="pt-4 mt-auto">
                             <button
-                              onClick={() => downloadImage(segment.imageUrl!, `slide_${idx + 1}.png`)}
+                              onClick={() => downloadAsFormat(segment.imageUrl!, `slide_${idx + 1}`, 'png')}
                               className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-white/5"
                             >
                               <Download className="w-4 h-4" />
