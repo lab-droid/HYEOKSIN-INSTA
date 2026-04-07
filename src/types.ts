@@ -12,7 +12,7 @@ export interface InstagramPostData {
   hashtags: string[];
 }
 
-export type AspectRatio = '1:1' | '4:5';
+export type AspectRatio = '1:1' | '4:5' | '9:16' | '16:9';
 
 declare global {
   interface Window {

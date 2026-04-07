@@ -13,8 +13,10 @@ type ScreenState = 'home' | 'planner';
 export default function App() {
   const [screen, setScreen] = useState<ScreenState>('home');
   const [topic, setTopic] = useState('');
-  const [count, setCount] = useState<number>(1);
-  const [ratio, setRatio] = useState<AspectRatio>('1:1');
+  const [count, setCount] = useState<number | 'auto'>('auto');
+  const [ratio, setRatio] = useState<AspectRatio>('4:5');
+  const [design, setDesign] = useState('AI 자동추천');
+  const [referenceContent, setReferenceContent] = useState('');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
   const [newLink, setNewLink] = useState('');
@@ -38,6 +40,10 @@ export default function App() {
 
   const handleGoHome = () => {
     setTopic('');
+    setCount('auto');
+    setRatio('4:5');
+    setDesign('AI 자동추천');
+    setReferenceContent('');
     setSegments([]);
     setReferenceImages([]);
     setSourceImage(null);
@@ -175,7 +181,7 @@ export default function App() {
       // 소스 이미지가 있으면 참고 이미지 목록 맨 앞에 추가
       const finalReferenceImages = sourceImage ? [sourceImage, ...referenceImages] : referenceImages;
       
-      const plan = await generatePlan(topic, count, ratio, finalReferenceImages, contentDraft);
+      const plan = await generatePlan(topic, count, ratio, finalReferenceImages, contentDraft, design, referenceContent);
       setSegments(plan);
       setProgress(20);
 
@@ -546,45 +552,109 @@ export default function App() {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">참고할 내용 (Reference Content)</label>
+                <textarea
+                  value={referenceContent}
+                  onChange={(e) => setReferenceContent(e.target.value)}
+                  placeholder="기획에 반영할 구체적인 내용이나 팩트가 있다면 입력해주세요."
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-white placeholder:text-zinc-600 min-h-[100px] resize-none"
+                />
+              </div>
+
+              <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium text-zinc-400">
                     장수 (Slides)
                   </label>
-                  <span className="text-sm font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md">{count}장</span>
+                  <span className="text-sm font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md">
+                    {count === 'auto' ? 'AI 자동추천' : `${count}장`}
+                  </span>
                 </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={count}
-                  onChange={(e) => setCount(parseInt(e.target.value))}
-                  className="w-full accent-indigo-500 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
-                />
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setCount('auto')}
+                    className={`flex-1 py-2 rounded-xl border text-xs font-medium transition-all ${
+                      count === 'auto'
+                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
+                        : 'bg-black/40 border-white/5 text-zinc-500 hover:border-white/20'
+                    }`}
+                  >
+                    AI 자동추천
+                  </button>
+                  <button
+                    onClick={() => setCount(prev => prev === 'auto' ? 5 : prev)}
+                    className={`flex-1 py-2 rounded-xl border text-xs font-medium transition-all ${
+                      count !== 'auto'
+                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
+                        : 'bg-black/40 border-white/5 text-zinc-500 hover:border-white/20'
+                    }`}
+                  >
+                    직접 선택
+                  </button>
+                </div>
+                {count !== 'auto' && (
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={count}
+                    onChange={(e) => setCount(parseInt(e.target.value))}
+                    className="w-full accent-indigo-500 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                  />
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-2">비율 (Aspect Ratio)</label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setRatio('1:1')}
-                    className={`py-3.5 rounded-2xl border text-sm font-medium transition-all ${
-                      ratio === '1:1' 
-                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-inner shadow-indigo-500/20' 
-                        : 'bg-black/40 border-white/5 text-zinc-400 hover:border-white/20 hover:bg-zinc-800/50'
-                    }`}
-                  >
-                    1:1 (피드용)
-                  </button>
-                  <button
-                    onClick={() => setRatio('4:5')}
-                    className={`py-3.5 rounded-2xl border text-sm font-medium transition-all ${
-                      ratio === '4:5' 
-                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-inner shadow-indigo-500/20' 
-                        : 'bg-black/40 border-white/5 text-zinc-400 hover:border-white/20 hover:bg-zinc-800/50'
-                    }`}
-                  >
-                    4:5 (세로형)
-                  </button>
+                  {[
+                    { id: '4:5', label: '4:5 (세로형)' },
+                    { id: '1:1', label: '1:1 (피드용)' },
+                    { id: '9:16', label: '9:16 (스토리)' },
+                    { id: '16:9', label: '16:9 (가로형)' },
+                  ].map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setRatio(r.id as AspectRatio)}
+                      className={`py-3 rounded-xl border text-xs font-medium transition-all ${
+                        ratio === r.id 
+                          ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-inner shadow-indigo-500/20' 
+                          : 'bg-black/40 border-white/5 text-zinc-400 hover:border-white/20 hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">디자인 선택 (Design)</label>
+                <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                  {[
+                    'AI 자동추천',
+                    '미니멀 & 깔끔',
+                    '비비드 & 팝',
+                    '다크 모드 & 테크',
+                    '파스텔 & 감성',
+                    '매거진 & 타이포그래피',
+                    '레트로 & 빈티지',
+                    '비즈니스 & 신뢰',
+                    '귀여운 & 캐릭터',
+                    '럭셔리 & 골드'
+                  ].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDesign(d)}
+                      className={`py-2.5 px-3 rounded-xl border text-[11px] font-medium transition-all text-left truncate ${
+                        design === d 
+                          ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' 
+                          : 'bg-black/40 border-white/5 text-zinc-500 hover:border-white/20 hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
                 </div>
               </div>
 

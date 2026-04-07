@@ -45,7 +45,15 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 7): Promi
   throw lastError;
 }
 
-export async function generatePlan(topic: string, count: number, ratio: AspectRatio, referenceImages: string[] = [], contentDraft?: string): Promise<CardnewsSegment[]> {
+export async function generatePlan(
+  topic: string, 
+  count: number | 'auto', 
+  ratio: AspectRatio, 
+  referenceImages: string[] = [], 
+  contentDraft?: string,
+  design: string = 'AI 자동추천',
+  referenceContent?: string
+): Promise<CardnewsSegment[]> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   
@@ -60,19 +68,21 @@ export async function generatePlan(topic: string, count: number, ratio: AspectRa
         const ai = new GoogleGenAI({ apiKey });
         const promptText = `
 당신은 대한민국 최고의 SNS 콘텐츠 바이럴 전략가이자 딥리서치 전문가입니다.
-${contentDraft ? `제공된 '콘텐츠 초안' 내용을 최우선으로 참고하여 기획안을 작성하세요.\n콘텐츠 초안: ${contentDraft}\n` : '구글 검색을 활용하여 사용자의 주제와 관련된 가장 최신의, 신뢰할 수 있는 고품질 데이터와 트렌드를 깊이 있게 조사(Deep Research)하세요.'}
-조사한 팩트 기반의 정보를 바탕으로 장수(${count}장)에 맞춰 논리적 흐름을 짜주세요.
+${referenceContent ? `제공된 '참고할 내용'을 최우선으로 분석하여 기획안을 작성하세요.\n참고할 내용: ${referenceContent}\n` : ''}
+${contentDraft ? `제공된 '콘텐츠 초안' 내용을 참고하여 기획안을 작성하세요.\n콘텐츠 초안: ${contentDraft}\n` : (referenceContent ? '' : '구글 검색을 활용하여 사용자의 주제와 관련된 가장 최신의, 신뢰할 수 있는 고품질 데이터와 트렌드를 깊이 있게 조사(Deep Research)하세요.')}
+조사한 팩트 기반의 정보를 바탕으로 ${count === 'auto' ? '주제에 가장 적합한 장수(보통 4~10장 사이)' : `장수(${count}장)`}에 맞춰 논리적 흐름을 짜주세요.
 
 논리 구조 적용: Hook(후킹) -> Info(정보 전달, 구체적 수치나 팩트 포함) -> Solution(해결책) -> Closing(마무리) 순으로 자동 구성.
 한국어 카피는 트렌디하고 직관적이어야 합니다.
 제약: 카피 내 영어를 절대 쓰지 마세요. Premium 대신 '최고급', Best 대신 '최고의'를 사용하세요.
 중요: 모든 슬라이드의 상단 중앙(Top 20%)은 로고를 위한 '세이프 존'입니다. 카피가 너무 길어지지 않도록 주의하고, 시각적 요소들이 하단과 중앙에 집중되도록 기획하세요.
 
-비주얼 프롬프트(visualPrompt) 작성 시, 정보성 인포그래픽(표, 리스트, 그리드, 아이콘, 뱃지 등) 스타일로 구성되도록 영어로 상세히 묘사해주세요. (예: "A dark mode infographic table with neon badges...", "A clean light green background list with bar charts...")
+디자인 스타일: ${design === 'AI 자동추천' ? '주제에 가장 어울리는 세련된 인포그래픽 스타일' : design}
+비주얼 프롬프트(visualPrompt) 작성 시, 선택된 디자인 스타일을 반영하여 정보성 인포그래픽(표, 리스트, 그리드, 아이콘, 뱃지 등) 스타일로 구성되도록 영어로 상세히 묘사해주세요. (예: "A dark mode infographic table with neon badges...", "A clean light green background list with bar charts...")
 ${referenceImages.length > 0 ? '\n중요: 첨부된 참고 이미지들의 디자인 스타일, 톤앤매너, 색감, 레이아웃을 완벽하게 분석하여 visualPrompt 묘사에 반영하세요.' : ''}
 
 주제: ${topic}
-장수: ${count}장
+장수: ${count === 'auto' ? 'AI 추천' : `${count}장`}
 사이즈: ${ratio}
 `;
 
