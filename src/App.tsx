@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AspectRatio, CardnewsSegment, InstagramPostData } from './types';
-import { generatePlan, generateImage, generateInstagramPost, generateDraftFromLinks, generateDraftFromImage } from './services/ai';
+import { generatePlan, generateImage, generateInstagramPost, generateDraftFromLinks, generateDraftFromImage, getUsage, getTotalCost, PRICING, resetUsage } from './services/ai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key, HelpCircle, Link, FileText, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key, HelpCircle, Link, FileText, Plus, Trash2, Calculator, Coins } from 'lucide-react';
 import { motion } from 'motion/react';
 import ApiKeyManager from './components/ApiKeyManager';
 
@@ -33,9 +33,15 @@ export default function App() {
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [logoImage, setLogoImage] = useState<string | null>(null);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [isUsageOpen, setIsUsageOpen] = useState(false);
+  const [usage, setUsage] = useState(getUsage());
 
   useEffect(() => {
     setHasApiKey(!!localStorage.getItem('gemini_api_key'));
+    
+    const updateUsage = () => setUsage(getUsage());
+    window.addEventListener('api_usage_updated', updateUsage);
+    return () => window.removeEventListener('api_usage_updated', updateUsage);
   }, []);
 
   const handleGoHome = () => {
@@ -403,6 +409,13 @@ export default function App() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsUsageOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 text-sm font-bold transition-all"
+            >
+              <Coins className="w-4 h-4" />
+              API 비용: {getTotalCost().toLocaleString()}원
+            </button>
             <button
               onClick={() => setIsHowToOpen(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shadow-sm bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300"
@@ -1314,6 +1327,89 @@ export default function App() {
         onClose={() => setIsKeyManagerOpen(false)} 
         onKeyUpdated={() => setHasApiKey(true)} 
       />
+
+      {/* Usage Modal */}
+      {isUsageOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onClick={() => setIsUsageOpen(false)}
+          />
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="relative w-full max-w-md bg-zinc-900 border border-white/10 rounded-3xl p-8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Calculator className="w-6 h-6 text-emerald-400" />
+                API 사용량 및 비용
+              </h2>
+              <button 
+                onClick={() => setIsUsageOpen(false)}
+                className="p-2 hover:bg-white/5 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-zinc-400" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <p className="text-xs text-zinc-500 mb-1">기획안 생성</p>
+                  <p className="text-lg font-bold text-white">{usage.planCalls}회</p>
+                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.PLAN_KRW}원</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <p className="text-xs text-zinc-500 mb-1">이미지 생성</p>
+                  <p className="text-lg font-bold text-white">{usage.imageCalls}회</p>
+                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.IMAGE_KRW}원</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <p className="text-xs text-zinc-500 mb-1">캡션 생성</p>
+                  <p className="text-lg font-bold text-white">{usage.captionCalls}회</p>
+                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.CAPTION_KRW}원</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <p className="text-xs text-zinc-500 mb-1">초안 생성</p>
+                  <p className="text-lg font-bold text-white">{usage.draftCalls}회</p>
+                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.DRAFT_KRW}원</p>
+                </div>
+              </div>
+
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-2xl text-center">
+                <p className="text-sm text-emerald-300/60 mb-1">총 예상 비용</p>
+                <p className="text-4xl font-black text-emerald-400">
+                  {getTotalCost().toLocaleString()} <span className="text-xl">원</span>
+                </p>
+                <p className="text-[10px] text-emerald-500/40 mt-2">* 이 비용은 대략적인 추정치이며 실제 청구액과 다를 수 있습니다.</p>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setIsUsageOpen(false)}
+                  className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-2xl transition-all"
+                >
+                  닫기
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('사용량 기록을 초기화하시겠습니까?')) {
+                      resetUsage();
+                    }
+                  }}
+                  className="px-6 py-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold rounded-2xl transition-all border border-red-500/20"
+                  title="초기화"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* How-to Guide Modal */}
       {isHowToOpen && (

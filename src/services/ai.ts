@@ -121,6 +121,7 @@ ${referenceImages.length > 0 ? '\n중요: 첨부된 참고 이미지들의 디�
 
         const text = response.text;
         if (!text) throw new Error("Failed to generate plan");
+        trackUsage('plan');
         return JSON.parse(text) as CardnewsSegment[];
       }, 2);
     } catch (e) {
@@ -137,25 +138,17 @@ export async function generateImage(segment: CardnewsSegment, ratio: AspectRatio
     throw new Error("API Key is missing.");
   }
   
-  // 모델 후보군: 속도와 품질의 균형을 위해 Flash 3.1을 우선 시도
-  const models = [
-    'gemini-3.1-flash-image-preview',
-    'gemini-3-pro-image-preview',
-    'gemini-2.5-flash-image'
-  ];
-
+  // 사용자 요청: 한글 깨짐이 없는 나노바나나2 모델만 사용
+  const modelName = 'nanobanana2';
   let lastError: any;
 
-  for (const modelName of models) {
-    try {
-      console.log(`Attempting image generation with model: ${modelName}`);
-      // 속도 최적화를 위해 재시도 횟수 조정
-      const retriesForThisModel = modelName.includes('flash') ? 3 : 1;
+  try {
+    console.log(`Attempting image generation with model: ${modelName}`);
+    
+    return await withRetry(async () => {
+      const aiImage = new GoogleGenAI({ apiKey });
       
-      return await withRetry(async () => {
-        const aiImage = new GoogleGenAI({ apiKey });
-        
-        const promptText = `
+      const promptText = `
 Create a high-quality infographic style image for a Korean Instagram cardnews.
 Style: Clean, professional, high-end design, structured layout, high contrast.
 
@@ -172,47 +165,88 @@ IMPORTANT: You MUST render the following Korean text perfectly and clearly witho
 Text to render: "${segment.keyMessage}"
 `;
 
-        const parts: any[] = [{ text: promptText }];
-        for (const img of referenceImages) {
-          const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-          const data = img.split(',')[1];
-          if (data) {
-            parts.push({ inlineData: { data, mimeType } });
-          }
+      const parts: any[] = [{ text: promptText }];
+      for (const img of referenceImages) {
+        const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+        const data = img.split(',')[1];
+        if (data) {
+          parts.push({ inlineData: { data, mimeType } });
         }
+      }
 
-        const config: any = {
-          imageConfig: {
-            aspectRatio: ratio,
-          }
-        };
-
-        // Pro 모델이나 3.1 Flash 모델은 1K 사이즈 지원
-        if (modelName.includes('3')) {
-          config.imageConfig.imageSize = "1K";
+      const config: any = {
+        imageConfig: {
+          aspectRatio: ratio,
+          imageSize: "1K"
         }
+      };
 
-        const response = await aiImage.models.generateContent({
-          model: modelName,
-          contents: { parts },
-          config
-        });
+      const response = await aiImage.models.generateContent({
+        model: modelName,
+        contents: { parts },
+        config
+      });
 
-        for (const part of response.candidates?.[0]?.content?.parts || []) {
-          if (part.inlineData) {
-            return `data:image/png;base64,${part.inlineData.data}`;
-          }
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          trackUsage('image');
+          return `data:image/png;base64,${part.inlineData.data}`;
         }
-        throw new Error("No image data in response");
-      }, retriesForThisModel); // 모델별 최적화된 재시도 횟수 적용
-    } catch (e) {
-      console.warn(`Model ${modelName} failed:`, e);
-      lastError = e;
-      // 다음 모델로 넘어감
-    }
+      }
+      throw new Error("No image data in response");
+    }, 3);
+  } catch (e) {
+    console.error(`Image generation with ${modelName} failed:`, e);
+    throw e;
   }
-  
-  throw lastError || new Error("All models failed to generate image");
+}
+
+// 비용 추적 유틸리티
+export interface ApiUsage {
+  planCalls: number;
+  imageCalls: number;
+  captionCalls: number;
+  draftCalls: number;
+}
+
+export const PRICING = {
+  PLAN_KRW: 10,
+  IMAGE_KRW: 40,
+  CAPTION_KRW: 5,
+  DRAFT_KRW: 10
+};
+
+export function getUsage(): ApiUsage {
+  if (typeof window === 'undefined') return { planCalls: 0, imageCalls: 0, captionCalls: 0, draftCalls: 0 };
+  const usage = localStorage.getItem('api_usage');
+  return usage ? JSON.parse(usage) : { planCalls: 0, imageCalls: 0, captionCalls: 0, draftCalls: 0 };
+}
+
+export function getTotalCost(): number {
+  const usage = getUsage();
+  return (
+    usage.planCalls * PRICING.PLAN_KRW +
+    usage.imageCalls * PRICING.IMAGE_KRW +
+    usage.captionCalls * PRICING.CAPTION_KRW +
+    usage.draftCalls * PRICING.DRAFT_KRW
+  );
+}
+
+function trackUsage(type: 'plan' | 'image' | 'caption' | 'draft') {
+  if (typeof window === 'undefined') return;
+  const usage = getUsage();
+  if (type === 'plan') usage.planCalls++;
+  else if (type === 'image') usage.imageCalls++;
+  else if (type === 'caption') usage.captionCalls++;
+  else if (type === 'draft') usage.draftCalls++;
+  localStorage.setItem('api_usage', JSON.stringify(usage));
+  window.dispatchEvent(new Event('api_usage_updated'));
+}
+
+export function resetUsage() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('api_usage');
+  window.dispatchEvent(new Event('api_usage_updated'));
 }
 
 export async function generateInstagramPost(topic: string, segments: CardnewsSegment[]): Promise<InstagramPostData> {
@@ -266,6 +300,7 @@ ${summary}
 
         const text = response.text;
         if (!text) throw new Error("Failed to generate post data");
+        trackUsage('caption');
         return JSON.parse(text) as InstagramPostData;
       }, 2);
     } catch (e) {
@@ -324,6 +359,7 @@ export async function generateDraftFromLinks(links: string[]): Promise<{ topic: 
 
         const text = response.text;
         if (!text) throw new Error("Failed to generate draft");
+        trackUsage('draft');
         return JSON.parse(text) as { topic: string; draft: string };
       }, 2); // 재시도 횟수를 줄여서 더 빠르게 실패하고 다음 모델로 넘어가도록 함
     } catch (e) {
@@ -385,6 +421,7 @@ export async function generateDraftFromImage(base64Image: string): Promise<{ top
 
         const text = response.text;
         if (!text) throw new Error("Failed to generate draft from image");
+        trackUsage('draft');
         return JSON.parse(text) as { topic: string; draft: string };
       }, 2);
     } catch (e) {
