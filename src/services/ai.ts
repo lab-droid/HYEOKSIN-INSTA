@@ -2,9 +2,9 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { AspectRatio, CardnewsSegment, InstagramPostData } from "../types";
 
 export const getApiKey = () => {
-  // AI Studio 플랫폼 키(process.env)를 최우선으로 사용합니다. (403 권한 오류 방지)
-  // 플랫폼 키가 없는 경우에만 사용자가 직접 입력한 localStorage 키를 사용합니다.
-  return process.env.GEMINI_API_KEY || process.env.API_KEY || localStorage.getItem('gemini_api_key');
+  // 플랫폼에서 선택한 키 (GEMINI_API_KEY)를 최우선으로 사용합니다. 
+  // 이는 구 버전의 수동 입력 키가 남아있어 403 오류가 발생하는 것을 방지하기 위함입니다.
+  return process.env.GEMINI_API_KEY || localStorage.getItem('gemini_api_key') || process.env.API_KEY;
 };
 
 async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 10): Promise<T> {
@@ -145,34 +145,28 @@ export async function generateImage(segment: CardnewsSegment, ratio: AspectRatio
     throw new Error("API Key is missing.");
   }
   
-  // 사용자 요청: 한글 깨짐이 없는 나노바나나2(gemini-3.1-flash-image-preview) 모델을 최우선으로 사용합니다.
-  // 나노바나나2 혹은 프로 모델(gemini-3-pro-image-preview)은 최신 고품질 인포그래픽 및 한글 렌더링을 지원합니다.
-  const models = ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'];
+  // 사용자 요청: 한글 깨짐이 절대 없는 나노바나나2(gemini-3.1-flash-image-preview) 모델만 엄격히 사용합니다.
+  // 다른 모델로의 자동 폴백을 제거하여 최상의 한글 렌더링 품질을 보장합니다.
+  const models = ['gemini-3.1-flash-image-preview'];
   let lastError: any;
 
   for (const modelName of models) {
     try {
-      console.log(`Attempting high-quality image generation with model: ${modelName}`);
+      console.log(`[Image] Strictly using ${modelName} for perfect Korean rendering...`);
       
       return await withRetry(async () => {
         const aiImage = new GoogleGenAI({ apiKey });
         
         const promptText = `
-  Create a high-quality infographic style image for a Korean Instagram cardnews.
-  Style: Clean, professional, high-end design, structured layout, high contrast.
+  Create a professional, high-end infographic image for a Korean Instagram cardnews.
   
-  CRITICAL LOGO SAFETY: 
-  1. Keep the TOP CENTER area (top 20% of the image) COMPLETELY EMPTY. 
-  2. No text, no icons, no characters, no busy patterns in this top-center zone. 
-  3. This space is strictly reserved for a brand logo that will be added later.
-  4. Place all main text and visual elements below this 20% top margin.
+  CRITICAL REQUIREMENT: You MUST render the Korean text below perfectly. 
+  NO character corruption, NO typos, NO overlapping text. Use a clean, modern typeface.
+  Text: "${segment.keyMessage}"
   
-  ${referenceImages.length > 0 ? '\nCRITICAL STYLE MATCH: You MUST perfectly match the tone, manner, color palette, and overall style of the provided reference images (100% consistency).' : ''}
-  Background visual: ${segment.visualPrompt}
-  
-  IMPORTANT: You MUST render the following Korean text perfectly and clearly without any character corruption or typos.
-  The text should be central and very legible.
-  Text to render: "${segment.keyMessage}"
+  Safety: Keep the top 20% area COMPLETELY EMPTY for a logo.
+  Visual Style: ${segment.visualPrompt}
+  Style: Clean, professional, minimal, high contrast, high resolution.
   `;
 
         const parts: any[] = [{ text: promptText }];
