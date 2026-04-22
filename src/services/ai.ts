@@ -2,7 +2,9 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { AspectRatio, CardnewsSegment, InstagramPostData } from "../types";
 
 export const getApiKey = () => {
-  return localStorage.getItem('gemini_api_key') || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  // AI Studio 플랫폼 키(process.env)를 최우선으로 사용합니다. (403 권한 오류 방지)
+  // 플랫폼 키가 없는 경우에만 사용자가 직접 입력한 localStorage 키를 사용합니다.
+  return process.env.GEMINI_API_KEY || process.env.API_KEY || localStorage.getItem('gemini_api_key');
 };
 
 async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 10): Promise<T> {
@@ -143,70 +145,92 @@ export async function generateImage(segment: CardnewsSegment, ratio: AspectRatio
     throw new Error("API Key is missing.");
   }
   
-  // 사용자 요청: 한글 깨짐이 없는 나노바나나2 모델만 사용
-  const modelName = 'nanobanana2';
+  // 사용자 요청: 한글 깨짐이 없는 나노바나나2(gemini-3.1-flash-image-preview) 모델을 최우선으로 사용합니다.
+  // 나노바나나2 혹은 프로 모델(gemini-3-pro-image-preview)은 최신 고품질 인포그래픽 및 한글 렌더링을 지원합니다.
+  const models = ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'];
   let lastError: any;
 
-  try {
-    console.log(`Attempting image generation with model: ${modelName}`);
-    
-    return await withRetry(async () => {
-      const aiImage = new GoogleGenAI({ apiKey });
+  for (const modelName of models) {
+    try {
+      console.log(`Attempting high-quality image generation with model: ${modelName}`);
       
-      const promptText = `
-Create a high-quality infographic style image for a Korean Instagram cardnews.
-Style: Clean, professional, high-end design, structured layout, high contrast.
+      return await withRetry(async () => {
+        const aiImage = new GoogleGenAI({ apiKey });
+        
+        const promptText = `
+  Create a high-quality infographic style image for a Korean Instagram cardnews.
+  Style: Clean, professional, high-end design, structured layout, high contrast.
+  
+  CRITICAL LOGO SAFETY: 
+  1. Keep the TOP CENTER area (top 20% of the image) COMPLETELY EMPTY. 
+  2. No text, no icons, no characters, no busy patterns in this top-center zone. 
+  3. This space is strictly reserved for a brand logo that will be added later.
+  4. Place all main text and visual elements below this 20% top margin.
+  
+  ${referenceImages.length > 0 ? '\nCRITICAL STYLE MATCH: You MUST perfectly match the tone, manner, color palette, and overall style of the provided reference images (100% consistency).' : ''}
+  Background visual: ${segment.visualPrompt}
+  
+  IMPORTANT: You MUST render the following Korean text perfectly and clearly without any character corruption or typos.
+  The text should be central and very legible.
+  Text to render: "${segment.keyMessage}"
+  `;
 
-CRITICAL LOGO SAFETY: 
-1. Keep the TOP CENTER area (top 20% of the image) COMPLETELY EMPTY. 
-2. No text, no icons, no characters, no busy patterns in this top-center zone. 
-3. This space is strictly reserved for a brand logo that will be added later.
-4. Place all main text and visual elements below this 20% top margin.
-
-${referenceImages.length > 0 ? '\nCRITICAL STYLE MATCH: You MUST perfectly match the tone, manner, color palette, and overall style of the provided reference images (100% consistency).' : ''}
-Background visual: ${segment.visualPrompt}
-
-IMPORTANT: You MUST render the following Korean text perfectly and clearly without any character corruption or typos.
-Text to render: "${segment.keyMessage}"
-`;
-
-      const parts: any[] = [{ text: promptText }];
-      for (const img of referenceImages) {
-        const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-        const data = img.split(',')[1];
-        if (data) {
-          parts.push({ inlineData: { data, mimeType } });
-        }
-      }
-
-      const config: any = {
-        imageConfig: {
-          aspectRatio: ratio,
-          imageSize: "1K"
-        }
-      };
-
-      const response = await aiImage.models.generateContent({
-        model: modelName,
-        contents: { parts },
-        config
-      });
-
-      if (response.candidates?.[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData) {
-            trackUsage('image');
-            return `data:image/png;base64,${part.inlineData.data}`;
+        const parts: any[] = [{ text: promptText }];
+        for (const img of referenceImages) {
+          const mimeType = img.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+          const data = img.split(',')[1];
+          if (data) {
+            parts.push({ inlineData: { data, mimeType } });
           }
         }
+
+        const config: any = {
+          imageConfig: {
+            aspectRatio: ratio,
+            imageSize: "1K"
+          }
+        };
+
+        const response = await aiImage.models.generateContent({
+          model: modelName,
+          contents: { parts },
+          config
+        });
+
+        if (response.candidates?.[0]?.content?.parts) {
+          for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData) {
+              trackUsage('image');
+              return `data:image/png;base64,${part.inlineData.data}`;
+            }
+          }
+        }
+        
+        throw new Error("No image data in response candidates");
+      }, 5); // 모델별 재시도 횟수를 적절히 조정하여 장애 발생 시 다음 모델로 빠르게 넘어가도록 함
+    } catch (e: any) {
+      const errorString = typeof e === 'string' ? e : JSON.stringify(e, Object.getOwnPropertyNames(e));
+      
+      // 403 PERMISSION_DENIED: 사용자가 특정 모델에 대한 권한이 없는 경우
+      if (errorString.includes('403') || errorString.includes('PERMISSION_DENIED')) {
+        console.warn(`${modelName} is not permitted, trying next high-quality model...`);
+        lastError = new Error(`권한 오류(403): ${modelName} 모델을 사용할 권한이 없습니다. 상단 '설정(Key)' 메뉴에서 [플랫폼 API 키 선택]을 통해 권한이 있는 키를 선택해주세요.`);
+        continue;
       }
       
-      throw new Error("No image data in response candidates");
-    }, 10); // 과부하 대비 재시도 횟수 10회로 증가
-  } catch (e) {
-    console.error(`Image generation with ${modelName} failed:`, e);
-    throw e;
+      // 404 NOT_FOUND인 경우(모델이 계정/지역에서 지원되지 않음) 다음 고품질 모델 시도
+      if (errorString.includes('404') || errorString.includes('NOT_FOUND')) {
+        console.warn(`${modelName} is not available, trying next high-quality model...`);
+        lastError = e;
+        continue;
+      }
+      
+      // 그 외 전치리 가능한 에러는 withRetry 내부에서 처리되었으나, 루프 탈출 조건
+      console.error(`Image generation with ${modelName} failed:`, e);
+      lastError = e;
+    }
   }
+  throw lastError;
 }
 
 // 비용 추적 유틸리티

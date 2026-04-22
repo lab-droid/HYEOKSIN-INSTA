@@ -5,6 +5,7 @@ export interface CardnewsSegment {
   visualPrompt: string;  // Imagen 3 전용 비주얼 묘사 (영어)
   imageUrl?: string;     // 생성된 이미지 URL (Base64/Blob) 
   error?: boolean;        // 이미지 생성 실패 여부
+  errorMessage?: string;  // 상세 에러 메시지
 }
 
 export interface InstagramPostData {

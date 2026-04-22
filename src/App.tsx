@@ -39,6 +39,15 @@ export default function App() {
   useEffect(() => {
     setHasApiKey(!!localStorage.getItem('gemini_api_key'));
     
+    // AI Studio 플랫폼 키 선택 여부 확인 (Gemini 3 모델 사용 시 필수)
+    const checkPlatformKey = async () => {
+      if (window.aistudio?.hasSelectedApiKey) {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        if (selected) setHasApiKey(true);
+      }
+    };
+    checkPlatformKey();
+
     const updateUsage = () => setUsage(getUsage());
     window.addEventListener('api_usage_updated', updateUsage);
     return () => window.removeEventListener('api_usage_updated', updateUsage);
@@ -230,7 +239,7 @@ export default function App() {
             setSegments(prev => {
               const updated = [...prev];
               if (updated[index]) {
-                updated[index] = { ...updated[index], error: true };
+                updated[index] = { ...updated[index], error: true, errorMessage: err instanceof Error ? err.message : String(err) };
               }
               return updated;
             });
@@ -1103,16 +1112,21 @@ export default function App() {
                       <div className="space-y-6 flex-1">
                         {segment.error && !segment.imageUrl && (
                           <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-4">
-                            <p className="text-xs text-red-400 mb-3 flex items-center gap-2">
+                            <p className="text-xs text-red-400 mb-2 flex items-center gap-2">
                               <XCircle className="w-4 h-4" />
-                              이미지 생성에 실패했습니다. (서버 과부하)
+                              이미지 생성 실패
                             </p>
+                            {segment.errorMessage && (
+                              <p className="text-[10px] text-red-400/70 mb-3 ml-6 leading-tight italic">
+                                "{segment.errorMessage}"
+                              </p>
+                            )}
                             <button
                               onClick={async () => {
                                 try {
                                   setSegments(prev => {
                                     const updated = [...prev];
-                                    updated[idx] = { ...updated[idx], error: false };
+                                    updated[idx] = { ...updated[idx], error: false, errorMessage: undefined };
                                     return updated;
                                   });
                                   const imgUrl = await generateImage(segment, ratio, referenceImages);
@@ -1124,7 +1138,7 @@ export default function App() {
                                 } catch (err) {
                                   setSegments(prev => {
                                     const updated = [...prev];
-                                    updated[idx] = { ...updated[idx], error: true };
+                                    updated[idx] = { ...updated[idx], error: true, errorMessage: err instanceof Error ? err.message : String(err) };
                                     return updated;
                                   });
                                 }
@@ -1304,7 +1318,7 @@ export default function App() {
                     } catch (err) {
                       setSegments(prev => {
                         const updated = [...prev];
-                        updated[idx] = { ...updated[idx], error: true };
+                        updated[idx] = { ...updated[idx], error: true, errorMessage: err instanceof Error ? err.message : String(err) };
                         return updated;
                       });
                     }
