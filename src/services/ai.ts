@@ -5,36 +5,41 @@ export const getApiKey = () => {
   return localStorage.getItem('gemini_api_key') || process.env.API_KEY || process.env.GEMINI_API_KEY;
 };
 
-async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 7): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 10): Promise<T> {
   let lastError: any;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // 120초 타임아웃으로 증가 (고품질 이미지 생성은 시간이 더 걸릴 수 있음)
+      // 타임아웃을 180초로 대폭 증가 (고부하 환경에서는 생성 시간이 길어질 수 있음)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Request Timeout")), 120000)
+        setTimeout(() => reject(new Error("Request Timeout")), 180000)
       );
       return await Promise.race([fn(), timeoutPromise]) as T;
     } catch (e: any) {
       lastError = e;
       const errorString = typeof e === 'string' ? e : JSON.stringify(e, Object.getOwnPropertyNames(e));
       
-      // 재시도 대상 에러: 503, 시간초과, 과부하, 데이터 없음 등
+      // 재시도 대상 에러 범위 확장: 503, 429(Quota), 시간초과, 과부하, 서버 점검 등
       const isRetryable = 
         errorString.includes('503') || 
+        errorString.includes('429') ||
         errorString.includes('Deadline expired') || 
         errorString.includes('high demand') || 
+        errorString.includes('overloaded') ||
         errorString.includes('UNAVAILABLE') ||
         errorString.includes('Timeout') ||
+        errorString.includes('rate limit') ||
+        errorString.includes('quota') ||
         errorString.includes('No image data');
 
       if (isRetryable) {
         if (attempt < maxRetries) {
-          // 지수 백오프 + 지터(Jitter) 추가하여 서버 부하 분산
-          const baseDelay = Math.pow(2, attempt) * 2000; 
-          const jitter = Math.random() * 1000;
-          const delay = Math.min(baseDelay + jitter, 30000); // 최대 30초 대기
+          // 지수 백오프 + 지터(Jitter) 최적화
+          // 초반에는 빠르게 재시도하다가, 뒤로 갈수록 대기 시간을 대폭 늘림 (서버 회복 기간 확보)
+          const baseDelay = Math.min(Math.pow(2, attempt) * 3000, 45000); 
+          const jitter = Math.random() * 2000;
+          const delay = baseDelay + jitter;
           
-          console.log(`Attempt ${attempt} failed, retrying in ${Math.round(delay/1000)}s... Error: ${errorString.substring(0, 100)}`);
+          console.log(`[Attempt ${attempt}/${maxRetries}] AI Service busy, retrying in ${Math.round(delay/1000)}s...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -187,14 +192,17 @@ Text to render: "${segment.keyMessage}"
         config
       });
 
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          trackUsage('image');
-          return `data:image/png;base64,${part.inlineData.data}`;
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            trackUsage('image');
+            return `data:image/png;base64,${part.inlineData.data}`;
+          }
         }
       }
-      throw new Error("No image data in response");
-    }, 3);
+      
+      throw new Error("No image data in response candidates");
+    }, 10); // 과부하 대비 재시도 횟수 10회로 증가
   } catch (e) {
     console.error(`Image generation with ${modelName} failed:`, e);
     throw e;

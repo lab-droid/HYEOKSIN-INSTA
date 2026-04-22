@@ -239,9 +239,9 @@ export default function App() {
           }
         }));
         
-        // 청크 사이에 지연시간 추가 (API 안정성 확보를 위해 3초로 증가)
+        // 청크 사이에 지연시간 추가 (API 안정성 확보를 위해 5초로 증가)
         if (i + chunkSize < planWithImages.length) {
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }
       setProgress(80);
