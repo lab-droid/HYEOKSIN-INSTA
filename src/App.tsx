@@ -423,7 +423,7 @@ export default function App() {
               className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 text-sm font-bold transition-all"
             >
               <Coins className="w-4 h-4" />
-              API 비용: {getTotalCost().toLocaleString()}원
+              API 비용
             </button>
             <button
               onClick={() => setIsHowToOpen(true)}
@@ -1369,36 +1369,52 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <p className="text-xs text-zinc-500 mb-1">기획안 생성</p>
-                  <p className="text-lg font-bold text-white">{usage.planCalls}회</p>
-                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.PLAN_KRW}원</p>
+            <div className="space-y-5">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div>
+                    <p className="text-sm font-medium text-white">기획안 생성</p>
+                    <p className="text-xs text-zinc-500">{usage.planCalls}회 × {PRICING.PLAN_KRW}원</p>
+                  </div>
+                  <p className="text-lg font-bold text-emerald-400">{(usage.planCalls * PRICING.PLAN_KRW).toLocaleString()}원</p>
                 </div>
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <p className="text-xs text-zinc-500 mb-1">이미지 생성</p>
-                  <p className="text-lg font-bold text-white">{usage.imageCalls}회</p>
-                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.IMAGE_KRW}원</p>
+
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div>
+                    <p className="text-sm font-medium text-white">이미지 생성</p>
+                    <p className="text-xs text-zinc-500">{usage.imageCalls}회 × {PRICING.IMAGE_KRW}원</p>
+                  </div>
+                  <p className="text-lg font-bold text-emerald-400">{(usage.imageCalls * PRICING.IMAGE_KRW).toLocaleString()}원</p>
                 </div>
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <p className="text-xs text-zinc-500 mb-1">캡션 생성</p>
-                  <p className="text-lg font-bold text-white">{usage.captionCalls}회</p>
-                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.CAPTION_KRW}원</p>
+
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div>
+                    <p className="text-sm font-medium text-white">인스타 캡션 추출</p>
+                    <p className="text-xs text-zinc-500">{usage.captionCalls}회 × {PRICING.CAPTION_KRW}원</p>
+                  </div>
+                  <p className="text-lg font-bold text-emerald-400">{(usage.captionCalls * PRICING.CAPTION_KRW).toLocaleString()}원</p>
                 </div>
-                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <p className="text-xs text-zinc-500 mb-1">초안 생성</p>
-                  <p className="text-lg font-bold text-white">{usage.draftCalls}회</p>
-                  <p className="text-[10px] text-zinc-600 mt-1">단가: {PRICING.DRAFT_KRW}원</p>
+
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div>
+                    <p className="text-sm font-medium text-white">링크/이미지 초안 분석</p>
+                    <p className="text-xs text-zinc-500">{usage.draftCalls}회 × {PRICING.DRAFT_KRW}원</p>
+                  </div>
+                  <p className="text-lg font-bold text-emerald-400">{(usage.draftCalls * PRICING.DRAFT_KRW).toLocaleString()}원</p>
                 </div>
               </div>
 
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-2xl text-center">
-                <p className="text-sm text-emerald-300/60 mb-1">총 예상 비용</p>
-                <p className="text-4xl font-black text-emerald-400">
-                  {getTotalCost().toLocaleString()} <span className="text-xl">원</span>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-3xl text-center shadow-inner shadow-emerald-500/5">
+                <p className="text-xs text-emerald-300/60 mb-2 uppercase tracking-widest font-bold">TOTAL ESTIMATED COST</p>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-4xl font-black text-emerald-400 tracking-tighter">
+                    {getTotalCost().toLocaleString()}
+                  </span>
+                  <span className="text-xl font-bold text-emerald-500">원</span>
+                </div>
+                <p className="text-[10px] text-emerald-500/40 mt-4 leading-relaxed">
+                  * 위 비용은 실제 구글 API 청구 비용이 아닌, 이용량 측정을 위한 가상의 추정치입니다.
                 </p>
-                <p className="text-[10px] text-emerald-500/40 mt-2">* 이 비용은 대략적인 추정치이며 실제 청구액과 다를 수 있습니다.</p>
               </div>
 
               <div className="flex gap-4">
