@@ -2,9 +2,17 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { AspectRatio, CardnewsSegment, InstagramPostData } from "../types";
 
 export const getApiKey = () => {
-  // 플랫폼에서 선택한 키 (GEMINI_API_KEY)를 최우선으로 사용합니다. 
-  // 이는 구 버전의 수동 입력 키가 남아있어 403 오류가 발생하는 것을 방지하기 위함입니다.
-  return process.env.GEMINI_API_KEY || localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+  // 플랫폼에서 선택하거나 환경변수로 주입된 키(GEMINI_API_KEY, API_KEY)를 최우선으로 사용합니다.
+  // 사용자가 명시적으로 [플랫폼 API 키 선택]을 완료하면 로컬에 저장된 구 버전의 수동 키보다 우선권을 갖게 됩니다.
+  const platformGeminiKey = process.env.GEMINI_API_KEY;
+  const platformApiKey = process.env.API_KEY;
+  const localKey = localStorage.getItem('gemini_api_key');
+
+  if (platformGeminiKey && platformGeminiKey.trim() !== '') return platformGeminiKey;
+  if (platformApiKey && platformApiKey.trim() !== '') return platformApiKey;
+  if (localKey && localKey.trim() !== '') return localKey;
+
+  return null;
 };
 
 async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 10): Promise<T> {
@@ -145,14 +153,20 @@ export async function generateImage(segment: CardnewsSegment, ratio: AspectRatio
     throw new Error("API Key is missing.");
   }
   
-  // 사용자 요청: 한글 깨짐이 절대 없는 나노바나나2(gemini-3.1-flash-image-preview) 모델만 엄격히 사용합니다.
-  // 다른 모델로의 자동 폴백을 제거하여 최상의 한글 렌더링 품질을 보장합니다.
-  const models = ['gemini-3.1-flash-image-preview'];
+  // 사용자 요청: 한글 깨짐이 절대 없는 나노바나나2(3.1 시리즈)급 모델군을 사용합니다.
+  // 404(NotFound) 혹은 403(Permission) 에러 발생 시, 동일 품질의 다른 프리뷰 모델로 자동 전환하여 안정성을 확보합니다.
+  const models = [
+    'gemini-3.1-flash-image-preview', 
+    'gemini-3.1-pro-image-preview',
+    'gemini-3.0-pro-image-preview',
+    'gemini-3.0-flash-image-preview'
+  ];
   let lastError: any;
 
   for (const modelName of models) {
     try {
-      console.log(`[Image] Strictly using ${modelName} for perfect Korean rendering...`);
+      if (lastError) console.log(`[Image] Fallback to next high-quality model: ${modelName}`);
+      else console.log(`[Image] Strictly using ${modelName} for perfect Korean rendering...`);
       
       return await withRetry(async () => {
         const aiImage = new GoogleGenAI({ apiKey });

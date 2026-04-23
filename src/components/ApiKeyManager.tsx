@@ -114,6 +114,14 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
               <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
                 나노바나나2 등 최신 고품질 모델 사용을 위해서는 플랫폼에서 직접 API 키를 선택하는 것을 권장합니다.
               </p>
+              
+              {process.env.GEMINI_API_KEY || process.env.API_KEY ? (
+                <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-3">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                  <p className="text-xs text-emerald-400 font-medium">플랫폼 API 키가 활성화되었습니다. (우선 적용 중)</p>
+                </div>
+              ) : null}
+
               <button
                 onClick={handleOpenPlatformPicker}
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
