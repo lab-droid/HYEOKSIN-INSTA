@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import CryptoJS from 'crypto-js';
 import { saveAs } from 'file-saver';
 import { GoogleGenAI } from '@google/genai';
-import { Key, Upload, Download, CheckCircle, XCircle, Loader2, X, Sparkles, Trash2 } from 'lucide-react';
+import { Key, Upload, Download, CheckCircle, XCircle, Loader2, X, Sparkles, Trash2, Eye, EyeOff } from 'lucide-react';
 
 interface ApiKeyManagerProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface ApiKeyManagerProps {
 
 export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyManagerProps) {
   const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
   const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
@@ -136,14 +137,25 @@ export default function ApiKeyManager({ isOpen, onClose, onKeyUpdated }: ApiKeyM
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-zinc-400">Gemini API Key 직접 입력</label>
             </div>
-            <input
-              id="apiKeyInput"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="AI Studio API 키 직접 입력"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-white"
-            />
+            <div className="relative group">
+              <input
+                id="apiKeyInput"
+                type={showKey ? "text" : "password"}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="AI Studio API 키 직접 입력"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-white pr-10"
+              />
+              {apiKey && (
+                <button
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+                >
+                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="pt-2 space-y-3">

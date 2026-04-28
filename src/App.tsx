@@ -3,12 +3,57 @@ import { AspectRatio, CardnewsSegment, InstagramPostData } from './types';
 import { generatePlan, generateImage, generateInstagramPost, generateDraftFromLinks, generateDraftFromImage, getUsage, getTotalCost, PRICING, resetUsage } from './services/ai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key, HelpCircle, Link, FileText, Plus, Trash2, Calculator, Coins } from 'lucide-react';
+import { Loader2, Download, Image as ImageIcon, LayoutTemplate, Settings2, ChevronRight, Sparkles, Wand2, Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, CheckCircle2, CircleDashed, Search, ArrowRight, Home, Upload, X, XCircle, Key, HelpCircle, Link, FileText, Plus, Trash2, Calculator, Coins, Bell } from 'lucide-react';
 import { motion } from 'motion/react';
 import ApiKeyManager from './components/ApiKeyManager';
 
 type WorkflowState = 'idle' | 'planning' | 'generating_images' | 'generating_caption' | 'completed';
 type ScreenState = 'home' | 'planner';
+
+const PATCH_NOTES = [
+  {
+    id: 4,
+    date: '2026-04-28',
+    title: '나노바나나2 & Gemini 3.1 업데이트',
+    content: [
+      '한글 깨짐 현상을 획기적으로 개선한 나노바나나2 이미지 모델 적용',
+      'Gemini 3.1 Pro 기반의 고도화된 카드뉴스 기획 로직 탑재',
+      '이미지 분석을 통한 원터치 자동 기획 기능 추가',
+      'API 키 관리 편의성 증대 (가시성 토글 기능)'
+    ],
+    isNew: true
+  },
+  {
+    id: 3,
+    date: '2026-04-25',
+    title: 'API 비용 추정 기능 추가',
+    content: [
+      '사용한 기능별로 예상되는 API 비용을 원화로 실시간 확인 가능',
+      '플랫폼 API 키 연동 안정성 강화'
+    ],
+    isNew: false
+  },
+  {
+    id: 2,
+    date: '2026-04-22',
+    title: 'UI/UX 안정성 개선',
+    content: [
+      '고화질 병합 저장 기능 레이아웃 최적화',
+      '모바일 환경에서의 반응형 디자인 보정'
+    ],
+    isNew: false
+  },
+  {
+    id: 1,
+    date: '2026-04-20',
+    title: '혁신 카드뉴스 AI 정식 런칭',
+    content: [
+      'AI 에이전트 기반 카드뉴스 기획 및 생성 서비스 시작',
+      '인스타그램 최적화 본문 및 해시태그 생성 지원'
+    ],
+    isNew: false
+  }
+];
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenState>('home');
@@ -34,6 +79,7 @@ export default function App() {
   const [logoImage, setLogoImage] = useState<string | null>(null);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const [isUsageOpen, setIsUsageOpen] = useState(false);
+  const [isPatchNotesOpen, setIsPatchNotesOpen] = useState(false);
   const [usage, setUsage] = useState(getUsage());
 
   useEffect(() => {
@@ -418,6 +464,19 @@ export default function App() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsPatchNotesOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-white/10 rounded-xl text-zinc-300 text-sm font-medium hover:bg-zinc-800 transition-all relative"
+            >
+              <Bell className="w-4 h-4 text-indigo-400" />
+              <span>패치노트</span>
+              {PATCH_NOTES.some(note => note.isNew) && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500 text-[8px] font-bold text-white items-center justify-center">NEW</span>
+                </span>
+              )}
+            </button>
             <button
               onClick={() => setIsUsageOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 text-sm font-bold transition-all"
@@ -1341,6 +1400,71 @@ export default function App() {
         onClose={() => setIsKeyManagerOpen(false)} 
         onKeyUpdated={() => setHasApiKey(true)} 
       />
+
+      {/* Patch Notes Modal */}
+      {isPatchNotesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-zinc-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col"
+          >
+            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-zinc-900/50">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                  <Bell className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-white">업데이트 패치노트</h3>
+                  <p className="text-sm text-zinc-500">실시간으로 반영되는 혁신 AI 기술 소식</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsPatchNotesOpen(false)}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar pb-12">
+              {PATCH_NOTES.map((note) => (
+                <div key={note.id} className="relative pl-8 border-l border-white/5">
+                  {/* Timeline point */}
+                  <div className={`absolute -left-[5px] top-0 w-[9px] h-[9px] rounded-full ${note.isNew ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-zinc-700'}`} />
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-sm font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded-md">{note.date}</span>
+                      <h4 className="text-xl font-bold text-white">{note.title}</h4>
+                      {note.isNew && (
+                        <span className="px-2 py-0.5 bg-indigo-500 text-[10px] font-black text-white rounded-md uppercase tracking-wider">NEW</span>
+                      )}
+                    </div>
+                    <ul className="space-y-3">
+                      {note.content.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-3 group">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400/60 mt-1 shrink-0 transition-all group-hover:text-emerald-400" />
+                          <p className="text-zinc-400 leading-relaxed text-sm group-hover:text-zinc-300 transition-colors">{item}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-8 border-t border-white/5 bg-zinc-900/50 flex justify-center">
+              <button
+                onClick={() => setIsPatchNotesOpen(false)}
+                className="px-8 py-3 bg-white text-black font-bold rounded-2xl hover:bg-zinc-200 transition-all shadow-xl shadow-white/5"
+              >
+                업데이트 확인 완료
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Usage Modal */}
       {isUsageOpen && (

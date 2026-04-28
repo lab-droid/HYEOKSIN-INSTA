@@ -172,15 +172,20 @@ export async function generateImage(segment: CardnewsSegment, ratio: AspectRatio
         const aiImage = new GoogleGenAI({ apiKey });
         
         const promptText = `
-  Create a professional, high-end infographic image for a Korean Instagram cardnews.
+  Create a top-tier, professional high-end infographic design for a Korean Instagram cardnews.
   
-  CRITICAL REQUIREMENT: You MUST render the Korean text below perfectly. 
-  NO character corruption, NO typos, NO overlapping text. Use a clean, modern typeface.
-  Text: "${segment.keyMessage}"
+  CRITICAL - HANGUL INTEGRITY: You MUST render the exact Korean text below with 100% accuracy.
+  - The text consists of HANGUL (Korean characters).
+  - NO character corruption, NO broken blocks, NO strange artifacts.
+  - Use a clean, modern, premium Korean San-serif or Serif typeface.
+  - The text must be large, legible, and the main focal point.
+  - Place the text on a clean, high-contrast area to ensure maximum readability.
   
-  Safety: Keep the top 20% area COMPLETELY EMPTY for a logo.
-  Visual Style: ${segment.visualPrompt}
-  Style: Clean, professional, minimal, high contrast, high resolution.
+  TEXT TO RENDER: "${segment.keyMessage}"
+  
+  Layout: Keep the TOP 22% area COMPLETELY EMPTY (Solid background only) for a brand logo.
+  Visual Context: ${segment.visualPrompt}
+  Style: Minimalist luxury, sharp details, balanced composition, 4K resolution quality.
   `;
 
         const parts: any[] = [{ text: promptText }];
